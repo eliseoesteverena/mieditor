@@ -5014,5 +5014,23 @@ html body .dock-panel button.has-t.has-t svg{display:block;flex:0 0 20px;width:2
 html body .dock-panel button.has-t.has-t svg *{stroke:currentColor}
 html body .dock-panel button.has-t.has-t svg :is(rect,circle){fill:none}
 </style>
+<style>
+/* ===== Ajustes v6: botones con icono + texto en paneles =====
+   Antes el ancho venía de reglas de "solo icono" (40-44 px) y el contenido se desbordaba encima del vecino.
+   Ahora cada botón mide lo que mide su contenido y los grupos pasan a varias filas en vez de comprimirse. */
+html body .dock-panel button.has-t.has-t{box-sizing:border-box !important;flex:0 0 auto !important;width:max-content !important;min-width:max-content !important;max-width:none !important;height:auto !important;min-height:44px !important;padding:0 16px !important;display:inline-flex !important;flex-direction:row !important;align-items:center !important;justify-content:flex-start !important;gap:8px !important;overflow:visible !important;white-space:nowrap !important}
+html body .dock-panel button.has-t.has-t .ib-t{display:block;flex:0 0 auto;position:static;white-space:nowrap;max-width:none}
+html body .dock-panel .tool :is(.seg,.grid2,.add-grid){flex-wrap:wrap !important;overflow:visible !important;gap:8px !important;align-items:center}
+</style>
+<style>
+/* ===== Ajustes v7: en móvil, una sola fila con scroll horizontal (los botones conservan su ancho) ===== */
+@media (max-width:900px){
+  html body .dock-panel .tool :is(.seg,.grid2,.add-grid){flex-wrap:nowrap !important;overflow-x:auto !important;overflow-y:hidden !important;-webkit-overflow-scrolling:touch;scrollbar-width:none;scroll-padding:0 12px;padding:2px 0}
+  html body .dock-panel .tool :is(.seg,.grid2,.add-grid)::-webkit-scrollbar{display:none}
+}
+@media (min-width:901px){
+  html body .dock-panel .tool :is(.seg,.grid2,.add-grid){flex-wrap:wrap !important;overflow:visible !important}
+}
+</style>
 </body>
 </html>
