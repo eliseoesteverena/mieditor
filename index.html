@@ -587,7 +587,7 @@ body.editing .side { display: none !important }
     <div class="pm-pane on" data-pm="proj">
       <input id="proj-name" class="proj-name" type="text" maxlength="120" placeholder="Nombre del proyecto" aria-label="Nombre del proyecto">
       <span id="save-status" class="save-status" role="status" aria-live="polite">Cargando…</span>
-      <b>Relación de aspecto</b>
+      <b hidden>Relación de aspecto</b>
       <div class="fmt-bar" aria-label="Formato de la pieza">
         <button data-fmt="4x5">4:5</button><button data-fmt="3x4">3:4</button><button data-fmt="1x1">1:1</button><button data-fmt="9x16">9:16</button>
       </div>
@@ -4506,22 +4506,43 @@ fitPreviews();
     lock: '<rect x="5" y="11" width="14" height="9" rx="2"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/>',
     del: '<path d="M5 7h14M10 7V4h4v3M7 7l1 13h8l1-13"/>',
     close: '<path d="M6 6l12 12M18 6L6 18"/>',
-    reset: '<path d="M4 12a8 8 0 1 0 2.6-5.9"/><path d="M4 4v5h5"/>'
+    reset: '<path d="M4 12a8 8 0 1 0 2.6-5.9"/><path d="M4 4v5h5"/>',
+    ratio: '<rect x="5" y="3" width="14" height="18" rx="2"/><path d="M9 7h3M12 17h3"/>'
   };
   const svg = n => '<svg viewBox="0 0 24 24" aria-hidden="true">' + IC[n] + '</svg>';
   /* id: [etiqueta, icono, tipo]  (p = abre panel, a = acción) */
   const T = {
-    add: ['Añadir', 'add', 'p'], pagebg: ['Fondo', 'pagebg', 'p'], deco: ['Decorativos', 'deco', 'p'], layers: ['Capas', 'layers', 'p'],
+    add: ['Añadir', 'add', 'p'], pagebg: ['Fondo', 'pagebg', 'p'], deco: ['Decorativos', 'deco', 'p'], layers: ['Capas', 'layers', 'p'], ratio: ['Proporción', 'ratio', 'p'],
     size: ['Tamaño', 'size', 'p'], color: ['Color', 'color', 'p'], bg: ['Fondo', 'bg', 'p'], align: ['Alinear', 'align', 'p'],
     spacing: ['Espaciado', 'spacing', 'p'], order: ['Orden', 'order', 'p'], arrange: ['Posición', 'arrange', 'p'], zoom: ['Zoom', 'zoom', 'p'],
     edit: ['Editar', 'edit', 'a'], swap: ['Cambiar', 'photo', 'a'], dup: ['Duplicar', 'dup', 'a'],
     lock: ['Bloquear', 'lock', 'a'], del: ['Eliminar', 'del', 'a'], close: ['Listo', 'close', 'a']
   };
 
+  const RATIOS = [['4x5', '4:5', 'Post clásico', '1080 × 1350', 12, 15], ['3x4', '3:4', 'Máximo espacio feed', '1080 × 1440', 12, 16],
+                  ['1x1', '1:1', 'Cuadrado', '1080 × 1080', 14, 14], ['9x16', '9:16', 'Stories / Reels', '1080 × 1920', 9, 16]];
+  function buildRatio(card, done) {
+    const d = document.createElement('div');
+    d.className = 'ratio-list';
+    d.setAttribute('role', 'listbox');
+    d.setAttribute('aria-label', 'Relación de aspecto');
+    d.innerHTML = RATIOS.map(r => '<button type="button" role="option" data-rt="' + r[0] + '" class="' + (card.dataset.fmt === r[0] ? 'on' : '') + '" aria-selected="' + (card.dataset.fmt === r[0]) + '">' +
+      '<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="' + (12 - r[4] / 2) + '" y="' + (12 - r[5] / 2) + '" width="' + r[4] + '" height="' + r[5] + '" rx="2"/></svg>' +
+      '<span class="rt-l"><b>' + r[1] + ' · ' + r[2] + '</b><small>' + r[3] + ' px</small></span></button>').join('');
+    d.addEventListener('click', e => {
+      const b = e.target.closest('button[data-rt]');
+      if (!b) return;
+      done();
+      setCurrent(b.dataset.rt);
+      if (typeof scheduleHistUI === 'function') scheduleHistUI();
+    });
+    return d;
+  }
+
   function ctxOf(card) {
     const piece = card.querySelector('.piece');
     const el = selected && piece.contains(selected) ? selected : null;
-    if (!el) return { sig: 'none', tools: ['add', 'pagebg', 'deco', 'layers'] };
+    if (!el) return { sig: 'none', tools: ['add', 'pagebg', 'deco', 'layers', 'ratio'] };
     const locked = isLocked(el), photo = el.classList.contains('photo'), st = el.classList.contains('pc-sticker'), txt = !!el.dataset.f;
     let t, k;
     if (locked) { k = 'L'; t = ['lock', 'dup']; }
@@ -4617,7 +4638,7 @@ fitPreviews();
       ['X / Y', [fld('.x-n')]],
       ['Giro', [fld('.rot-n')]]
     ]);
-    box('layers', [blk('.el-list')]); box('add', [blk('.add-grid')]); tabbed('deco', [['Biblioteca', [q('.lib')]], ['+ Nuevo', [], '', () => openDecoModal()]]);
+    box('layers', [blk('.el-list')]); box('ratio', [buildRatio(card, () => setTool(''))]); box('add', [blk('.add-grid')]); tabbed('deco', [['Biblioteca', [q('.lib')]], ['+ Nuevo', [], '', () => openDecoModal()]]);
 
     const st = card._dock = { sig: null, tool: '' };
     const mark = () => bar.querySelectorAll('button[data-t]').forEach(b => b.classList.toggle('on', b.dataset.t === st.tool));
@@ -5036,6 +5057,17 @@ html body .dock-panel .tool :is(.seg,.grid2,.add-grid){flex-wrap:wrap !important
 /* ===== Ajustes v8: la fila alineaba al centro; al desbordar, el inicio quedaba fuera y no se podía deslizar hasta él ===== */
 html body .dock-panel .tool :is(.seg,.grid2,.add-grid,.lib,.subtabs,.cp-row,.sub.on){justify-content:flex-start !important}
 html body .dock-panel .tool :is(.seg,.grid2,.add-grid){width:100%;max-width:100%;box-sizing:border-box}
+</style>
+<style>
+/* ===== Ajustes v9: Proporción en la barra inferior ===== */
+#proj-menu .fmt-bar{display:none !important}
+.ratio-list{display:flex;flex-direction:column;gap:4px;width:100%}
+html body .ratio-list button{display:flex;align-items:center;justify-content:flex-start;gap:14px;width:100%;min-height:52px;padding:6px 16px;border-radius:12px;font:inherit;text-align:left;white-space:normal;cursor:pointer}
+html body .ratio-list button.on{background:var(--ui-accent-soft)}
+.ratio-list svg{flex:0 0 28px;width:28px;height:28px;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+.rt-l{display:flex;flex-direction:column;min-width:0}
+.rt-l b{font-size:.9rem;font-weight:650;line-height:1.25}
+.rt-l small{font-size:.75rem;line-height:1.25;opacity:.75}
 </style>
 </body>
 </html>
