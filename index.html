@@ -5032,5 +5032,10 @@ html body .dock-panel .tool :is(.seg,.grid2,.add-grid){flex-wrap:wrap !important
   html body .dock-panel .tool :is(.seg,.grid2,.add-grid){flex-wrap:wrap !important;overflow:visible !important}
 }
 </style>
+<style>
+/* ===== Ajustes v8: la fila alineaba al centro; al desbordar, el inicio quedaba fuera y no se podía deslizar hasta él ===== */
+html body .dock-panel .tool :is(.seg,.grid2,.add-grid,.lib,.subtabs,.cp-row,.sub.on){justify-content:flex-start !important}
+html body .dock-panel .tool :is(.seg,.grid2,.add-grid){width:100%;max-width:100%;box-sizing:border-box}
+</style>
 </body>
 </html>
