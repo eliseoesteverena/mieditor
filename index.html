@@ -4775,9 +4775,9 @@ fitPreviews();
   const sheet = document.createElement('div');
   sheet.id = 'cp-sheet';
   sheet.innerHTML =
-    '<div class="cps-head"><button type="button" data-a="back" aria-label="Cancelar">←</button><b class="cps-t"></b><button type="button" data-a="ok" aria-label="Aceptar">✓</button></div>' +
+    '<div class="cps-head"><button type="button" data-a="back" aria-label="Cancelar"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M19 12H5M11 6l-6 6 6 6"/></svg><span>Cancelar</span></button><b class="cps-t"></b><button type="button" data-a="ok" aria-label="Aceptar"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7"/></svg><span>Listo</span></button></div>' +
     '<div class="subtabs cps-modes"><button type="button" data-m="solid">Color</button><button type="button" data-m="grad">Degradado</button></div>' +
-    '<div class="cps-grad"><button type="button" class="cps-st" data-s="0" aria-label="Color inicial"></button><button type="button" class="cps-st" data-s="1" aria-label="Color final"></button><button type="button" class="cps-sw2" data-a="swap" aria-label="Invertir">⇄</button><input type="range" class="cps-ang" min="0" max="360" aria-label="Ángulo"><span class="cps-angv"></span></div>' +
+    '<div class="cps-grad"><button type="button" class="cps-st" data-s="0" aria-label="Color inicial"></button><button type="button" class="cps-st" data-s="1" aria-label="Color final"></button><button type="button" class="cps-sw2" data-a="swap" aria-label="Invertir"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 7h12l-3-3M17 17H5l3 3"/></svg><span>Invertir</span></button><input type="range" class="cps-ang" min="0" max="360" aria-label="Ángulo"><span class="cps-angv"></span></div>' +
     '<div class="cps-sv"><i></i></div>' +
     '<input type="range" class="cps-sl cps-hue" min="0" max="360" aria-label="Tono">' +
     '<input type="range" class="cps-sl cps-alpha" min="0" max="100" aria-label="Transparencia">' +
@@ -4920,5 +4920,99 @@ fitPreviews();
   syncAll();
 })();
 </script>
+<style>
+/* ===== Ajustes v2 ===== */
+/* 1) Muestras visibles: la regla global dejaba todos los botones transparentes (!important) */
+html body .side .cp .cp-row button.cp-sw{background:var(--bg,var(--c)) !important;box-shadow:inset 0 0 0 1px rgba(128,128,128,.5) !important}
+html body .side .cp .cp-row button.cp-sw.on{box-shadow:inset 0 0 0 1px rgba(128,128,128,.5),0 0 0 2px var(--ui-surface),0 0 0 4px var(--ui-accent) !important}
+html body .side .cp .cp-row button.cp-add{background:conic-gradient(#f33,#fc3,#6d3,#3cf,#63f,#f3c,#f33) !important;box-shadow:none !important}
+.cp-sw.none{--bg:linear-gradient(135deg,transparent 45%,#e5484d 45% 55%,transparent 55%),repeating-conic-gradient(#ccc 0 25%,#fff 0 50%) 0 0/12px 12px}
+.cp-sw,.cp-add{overflow:visible}
+/* 2) Iconos SVG en la hoja */
+.cps-head button svg,.cps-sw2 svg{width:22px;height:22px;flex:0 0 auto;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+#cp-sheet .cps-head button{display:flex;align-items:center;gap:6px;width:auto;height:44px;padding:0 12px;border-radius:999px;font-size:.85rem;font-weight:650}
+#cp-sheet .cps-sw2{display:flex;align-items:center;gap:6px;width:auto;padding:0 12px;border-radius:999px;font-size:.8rem;font-weight:600;color:inherit}
+/* 3) Textos e iconos en negro/blanco según tema */
+html body .side :is(button,label,span,small,output,.btn,.cp-add){color:var(--ui-text) !important}
+.subtabs button,.subtabs button.on,#cp-sheet .subtabs button,.cps-save,.cps-angv{color:var(--ui-text)}
+/* 4) Rangos a todo el ancho y números sin fondo gris */
+html body .side .tool .fld,html body .side .tool .fld>.row{width:100%;max-width:none;box-sizing:border-box}
+html body .side .tool .row input[type=range]{flex:1 1 auto;width:100%;min-width:0}
+html body .side .tool .row input[type=number]{flex:0 0 64px;width:64px;text-align:center;background:transparent !important;border-radius:0;box-shadow:inset 0 -1.5px 0 var(--ui-line)}
+.sub .fld{flex:1 1 100%;min-width:0}
+.cps-hex{background:transparent;border-radius:0;box-shadow:inset 0 -1.5px 0 var(--ui-line)}
+/* 5) Iconos con texto */
+html body button.has-t.has-t{display:inline-flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;width:auto;height:auto;min-width:56px;min-height:52px;padding:4px 8px;font:inherit;font-size:.66rem;font-weight:600;line-height:1.1;text-align:center;white-space:normal}
+.has-t .ib-t{display:block;max-width:76px}
+/* 6) Escritorio: panel lateral + tamaños mayores */
+@media (min-width:901px){
+  html{font-size:18px}
+  :root{--sbw:400px}
+  .side{left:auto;right:0;top:var(--appbar-h,64px);bottom:0;width:var(--sbw);padding-bottom:0;border-top:0;border-left:1px solid var(--ui-line);box-shadow:-6px 0 20px rgba(0,0,0,.18)}
+  .dock{max-width:none;height:100%;margin:0;flex-direction:column-reverse;justify-content:flex-end}
+  .dock-panel{max-height:none;flex:1 1 auto;padding:14px 16px;border-bottom:0;border-top:1px solid var(--ui-line)}
+  .dock-tools{flex-wrap:wrap;overflow:visible;gap:6px;padding:10px}
+  .dock-tools button{flex:1 0 84px;min-height:64px;font-size:.72rem}
+  .dock-tools button svg{width:26px;height:26px}
+  .dock-tools .sep{display:none}
+  .page,body.has-sheet .page,body.sheet-expanded .page{padding-bottom:40px;padding-right:calc(var(--sbw) + 20px)}
+  .toast,body.has-sheet .toast{bottom:24px}
+  .tool :is(.seg,.grid2,.add-grid,.lib){flex-wrap:wrap;overflow:visible}
+  .cp-row{flex-wrap:wrap;overflow:visible}
+  .cp-sw,.cp-add,.cps-st{width:46px;height:46px}
+  #cp-sheet{left:auto;right:0;top:var(--appbar-h,64px);bottom:0;width:var(--sbw);max-width:none;max-height:none;margin:0;border-radius:0;border-left:1px solid var(--ui-line);box-shadow:-6px 0 20px rgba(0,0,0,.18)}
+  .cps-sv{height:200px}
+}
+</style>
+<script>
+(function () {
+  const root = document.documentElement, ab = document.querySelector('.appbar');
+  /* Iconos con texto */
+  const SHORT = { 'proj-open': 'Proyectos', 'nav-more': 'Más' };
+  document.querySelectorAll('.appbar .ab-btn, .side .dock-panel button, .card-actions button').forEach(b => {
+    if (b.classList.contains('has-t') || !b.querySelector('svg') || b.textContent.trim()) return;
+    const t = (b.classList.contains('txt-reset') ? 'Restablecer' : SHORT[b.id] || b.title || b.getAttribute('aria-label') || '').replace(/^Alinear a la /, '');
+    if (!t) return;
+    const s = document.createElement('span');
+    s.className = 'ib-t';
+    s.textContent = t;
+    b.appendChild(s);
+    b.classList.add('has-t');
+  });
+  /* Altura de la barra superior (el panel lateral de escritorio cuelga de ella) */
+  if (ab) {
+    const set = () => root.style.setProperty('--appbar-h', ab.offsetHeight + 'px');
+    set();
+    if (window.ResizeObserver) new ResizeObserver(set).observe(ab);
+    window.addEventListener('resize', set);
+  }
+})();
+</script>
+<style>
+/* ===== Ajustes v3 ===== */
+/* Muestras: subir especificidad para ganar a la regla global de botones transparentes */
+html body .side .cp .cp-row button.cp-sw.cp-sw.cp-sw{background:var(--bg,var(--c)) !important}
+html body .side .cp .cp-row button.cp-add.cp-add.cp-add{background:conic-gradient(#f33,#fc3,#6d3,#3cf,#63f,#f3c,#f33) !important}
+/* Botones con icono dentro de los paneles: texto a la derecha y más aire lateral */
+html body .dock-panel button.has-t.has-t{flex-direction:row;gap:8px;min-width:0;min-height:44px;padding:0 18px;font-size:.85rem;white-space:nowrap}
+html body .dock-panel .has-t .ib-t{max-width:none}
+html body .dock-panel .has-t svg{width:20px;height:20px}
+.tool :is(.seg,.grid2,.add-grid){gap:8px}
+</style>
+<style>
+/* ===== Ajustes v4 =====
+   La regla global de botones usa :is(..., #busy, ...) y por eso pesa como un id: ninguna clase la supera.
+   El color se pinta en un pseudo-elemento, que esa regla no alcanza. */
+.cp-sw::before,.cp-add::before{content:"";position:absolute;inset:0;border-radius:50%;pointer-events:none}
+.cp-sw::before{background:var(--bg,var(--c))}
+.cp-add::before{background:conic-gradient(#f33,#fc3,#6d3,#3cf,#63f,#f3c,#f33)}
+.cp-sw::after{content:none}
+</style>
+<style>
+/* ===== Ajustes v5: el icono nunca se encoge ni pierde el trazo dentro de los botones con texto ===== */
+html body .dock-panel button.has-t.has-t svg{display:block;flex:0 0 20px;width:20px;min-width:20px;height:20px;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round;overflow:visible;opacity:1}
+html body .dock-panel button.has-t.has-t svg *{stroke:currentColor}
+html body .dock-panel button.has-t.has-t svg :is(rect,circle){fill:none}
+</style>
 </body>
 </html>
