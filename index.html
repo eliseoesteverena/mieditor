@@ -893,12 +893,17 @@ function fitPreviews() {
     const piece = stage.querySelector('.piece');
     const h = piece.offsetHeight;
     // En móvil se ajusta solo al ancho: el alto de la ventana cambia al scrollear (barras del navegador)
-    const s = Math.min(1, stage.clientWidth / 1080, narrow ? Infinity : maxH / h);
-    piece.style.transform = `scale(${s})`;
-    piece.style.marginLeft = Math.max(0, (stage.clientWidth - 1080 * s) / 2) + 'px';
+    const s0 = Math.min(1, stage.clientWidth / 1080, narrow ? Infinity : maxH / h);
+    const z = Math.max(1, parseFloat(piece.dataset.vz) || 1), s = s0 * z;      // z = zoom de la vista (pellizco / Shift+rueda)
+    const sw = stage.clientWidth, sh = h * s0, W = 1080 * s, H = h * s, ml = Math.max(0, (sw - W) / 2);
+    const tx = z > 1 ? Math.min(0, Math.max(parseFloat(piece.dataset.vx) || 0, Math.min(0, sw - W - ml))) : 0;
+    const ty = z > 1 ? Math.min(0, Math.max(parseFloat(piece.dataset.vy) || 0, Math.min(0, sh - H))) : 0;
+    piece.dataset.vx = tx; piece.dataset.vy = ty;
+    piece.style.transform = z > 1 ? `translate(${tx}px, ${ty}px) scale(${s})` : `scale(${s})`;
+    piece.style.marginLeft = ml + 'px';
     piece.style.setProperty('--inv', (1 / s).toFixed(3));   // compensa la escala en tiradores y contornos
     piece.dataset.scale = s;
-    stage.style.height = (h * s) + 'px';
+    stage.style.height = sh + 'px';                          // el alto de la tarjeta no cambia con el zoom
   });
   refreshPhotos();
 }
@@ -2315,57 +2320,57 @@ document.addEventListener('pointerup', e => {
   }
 });
 
-/* Pellizco con dos dedos sobre el elemento seleccionado: escala y gira */
+/* Pellizco con dos dedos (con un elemento seleccionado): zoom de la vista sobre el punto pellizcado.
+   Mover los dos dedos a la vez desplaza la vista. Ya no escala ni gira el elemento. */
+const VZ_MAX = 4;
+function viewApply(piece, z, mx, my, u, v) {   // (mx,my) = punto en pantalla; (u,v) = punto de la pieza que debe quedar bajo él
+  const stage = piece.closest('.stage'), r = stage.getBoundingClientRect();
+  z = Math.min(VZ_MAX, Math.max(1, z));
+  if (z < 1.04) z = 1;
+  const s = (scaleOf(piece) / (parseFloat(piece.dataset.vz) || 1)) * z, ml = Math.max(0, (stage.clientWidth - 1080 * s) / 2);
+  piece.dataset.vz = z;
+  piece.dataset.vx = mx - u * s - (r.left + stage.clientLeft) - ml;
+  piece.dataset.vy = my - v * s - (r.top + stage.clientTop);
+  fitPreviews();
+  updateBox();
+}
 document.addEventListener('pointerdown', e => {
-  if (e.pointerType !== 'touch' || !selected || isLocked(selected)) return;
-  const piece = selected.closest('.piece');
-  if (!piece || !piece.contains(e.target) || piece.classList.contains('is-editing')) return;
+  if (e.pointerType !== 'touch') return;
+  const stage = e.target.closest && e.target.closest('.stage'), piece = stage && stage.querySelector('.piece');
+  if (!piece || piece.classList.contains('is-editing')) return;
   touches.set(e.pointerId, { x: e.clientX, y: e.clientY });
   if (touches.size === 2) {
     dragState = null; resizeState = null; panState = null; tapC = null;
-    startGesture();
+    const [a, b] = [...touches.values()], pr = piece.getBoundingClientRect(), s = scaleOf(piece);
+    gesture = { piece, d0: Math.hypot(b.x - a.x, b.y - a.y) || 1, z0: parseFloat(piece.dataset.vz) || 1,
+                u: ((a.x + b.x) / 2 - pr.left) / s, v: ((a.y + b.y) / 2 - pr.top) / s };
     e.stopPropagation();
   }
 }, true);
 
-function startGesture() {
-  const el = selected;
-  const [a, b] = [...touches.values()];
-  if (!el || !a || !b) return;
-  const cs = getComputedStyle(el);
-  const isText = !!el.dataset.f;
-  if (!isText && cs.display === 'inline') el.style.display = 'block';
-  gesture = {
-    el, isText,
-    d0: Math.hypot(b.x - a.x, b.y - a.y) || 1,
-    a0: Math.atan2(b.y - a.y, b.x - a.x),
-    rot0: parseFloat(el.dataset.rot) || 0,
-    w0: el.offsetWidth, h0: el.offsetHeight,
-    dx0: parseFloat(el.dataset.dx) || 0, dy0: parseFloat(el.dataset.dy) || 0,
-    fs0: parseFloat(cs.fontSize) || 16
-  };
-}
-
 document.addEventListener('pointermove', e => {
   if (touches.has(e.pointerId)) touches.set(e.pointerId, { x: e.clientX, y: e.clientY });
   if (!gesture || touches.size < 2) return;
-  const [a, b] = [...touches.values()];
-  const g = gesture, el = g.el;
-  const k = Math.hypot(b.x - a.x, b.y - a.y) / g.d0;
-  const ang = (Math.atan2(b.y - a.y, b.x - a.x) - g.a0) * 180 / Math.PI;
-  el.dataset.rot = Math.round((g.rot0 + ang) * 10) / 10;
-  if (g.isText) {
-    el.style.fontSize = Math.min(200, Math.max(12, Math.round(g.fs0 * k))) + 'px';
-  } else {
-    el.style.width = Math.max(20, Math.round(g.w0 * k)) + 'px';
-    el.style.height = Math.max(20, Math.round(g.h0 * k)) + 'px';
-  }
-  // El centro del elemento queda fijo mientras crece o se achica
-  el.dataset.dx = g.dx0 - (el.offsetWidth - g.w0) / 2;
-  el.dataset.dy = g.dy0 - (el.offsetHeight - g.h0) / 2;
-  applyT(el);
-  updateBox();
+  const g = gesture, [a, b] = [...touches.values()];
+  viewApply(g.piece, g.z0 * Math.hypot(b.x - a.x, b.y - a.y) / g.d0, (a.x + b.x) / 2, (a.y + b.y) / 2, g.u, g.v);
 });
+
+/* Con dos dedos sobre la pieza el navegador no debe hacer scroll ni zoom de página */
+document.addEventListener('touchmove', e => {
+  if ((gesture || e.touches.length >= 2) && e.cancelable && e.target.closest && e.target.closest('.stage')) e.preventDefault();
+}, { passive: false });
+
+/* Escritorio: Shift + rueda = zoom de la vista sobre el cursor */
+document.addEventListener('wheel', e => {
+  if (!e.shiftKey) return;
+  const stage = e.target.closest && e.target.closest('.stage');
+  const piece = stage && stage.querySelector('.piece');
+  if (!piece || piece.classList.contains('is-editing')) return;
+  e.preventDefault();
+  const pr = piece.getBoundingClientRect(), s = scaleOf(piece);
+  viewApply(piece, (parseFloat(piece.dataset.vz) || 1) * Math.exp(-(e.deltaY || e.deltaX) * 0.0015),
+            e.clientX, e.clientY, (e.clientX - pr.left) / s, (e.clientY - pr.top) / s);
+}, { passive: false });
 
 function endTouch(e) {
   if (!touches.delete(e.pointerId)) return;
@@ -5068,6 +5073,10 @@ html body .ratio-list button.on{background:var(--ui-accent-soft)}
 .rt-l{display:flex;flex-direction:column;min-width:0}
 .rt-l b{font-size:.9rem;font-weight:650;line-height:1.25}
 .rt-l small{font-size:.75rem;line-height:1.25;opacity:.75}
+</style>
+<style>
+/* Zoom de vista con pellizco, también sin selección: el scroll con un dedo sigue igual, el zoom de página del navegador se desactiva sobre la pieza */
+.stage,.stage .piece{touch-action:pan-x pan-y}
 </style>
 </body>
 </html>
