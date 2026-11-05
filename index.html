@@ -150,8 +150,6 @@ body { font-family: 'Inter', system-ui, sans-serif; background: var(--paper); co
 .side button.btn-sm { width: 100%; justify-content: center }
 .side .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 8px }
 .side input:disabled, .side button:disabled, .side .row input:disabled { opacity: .45; cursor: not-allowed }
-.side details summary { cursor: pointer; font-weight: 600; font-size: .9rem; margin-bottom: 8px }
-.side .code-in { width: 100%; font: 12px ui-monospace, Menlo, monospace; padding: 8px; margin-bottom: 10px; border: 1.5px solid var(--ink); border-radius: var(--radius); background: var(--white); color: var(--ink); resize: vertical }
 .lib { display: grid; grid-template-columns: 1fr 1fr; gap: 8px }
 .lib-item { background: var(--paper); border: 1.5px solid var(--ink); border-radius: var(--radius); padding: 8px; cursor: pointer; box-shadow: 2px 2px 0 var(--ink); font: inherit }
 .lib-item:hover { background: var(--paper-2) }
@@ -211,7 +209,7 @@ body.has-sheet .toast { bottom: calc(150px + env(safe-area-inset-bottom, 0px)) }
   .btn-sm, .toggle { min-height: 44px }
   .toggle input, .side .chk input { width: 22px; height: 22px }
   .tab { min-height: 44px; font-size: .8rem }
-  .side .row input[type="text"], .side .row input[type="number"], .side .row .mini input, .side .code-in { font-size: 16px; min-height: 44px }
+  .side .row input[type="text"], .side .row input[type="number"], .side .row .mini input { font-size: 16px; min-height: 44px }
   .side .row input[type="color"] { width: 52px; height: 44px }
   .side .row input[type="range"] { min-height: 32px }
   .el-row { min-height: 52px }
@@ -437,7 +435,7 @@ body { background: var(--ui-bg); color: var(--ui-text) }
 .add-item { min-height: 40px; padding: 6px 8px }
 .lib-item { min-height: 52px; padding: 6px }
 .lib-prev { height: 44px }
-.side .row input[type="text"], .side .row input[type="number"], .side .row .mini input, .side .code-in { min-height: 38px }
+.side .row input[type="text"], .side .row input[type="number"], .side .row .mini input { min-height: 38px }
 .side .row input[type="color"] { width: 44px; height: 38px }
 .proj-menu { gap: 10px; padding: 10px; top: calc(100% + 4px) }
 .pm-sec { gap: 6px }
@@ -472,14 +470,11 @@ body.editing .side { display: none !important }
 .dock { display: flex; flex-direction: column; width: 100%; max-width: 760px; margin: 0 auto }
 .dock-panel { display: none; max-height: min(42vh, 360px); overflow-y: auto; overscroll-behavior: contain; padding: 0 12px 8px; border-bottom: 1px solid var(--ui-line) }
 .side.dock-open .dock-panel { display: block }
-.dock-head { position: sticky; top: 0; z-index: 1; display: flex; align-items: center; justify-content: space-between; padding: 6px 0 4px; background: var(--ui-surface) }
-.dock-title { font-size: .72rem; font-weight: 650; text-transform: uppercase; letter-spacing: .07em; color: var(--ui-muted) }
-.dock-ok { width: 40px; height: 32px; display: flex; align-items: center; justify-content: center; padding: 0; color: var(--ui-accent); background: transparent; border: 0; cursor: pointer }
-.dock-ok svg, .dock-tools button svg { width: 22px; height: 22px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round }
+.dock-tools button svg { width: 22px; height: 22px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round }
 .tool { display: none }
 .tool.on { display: block }
 .tool .side-block { padding: 0; border: 0; background: none; box-shadow: none }
-.tool :is(h3, .sel-name, .hint:not(.code-msg)) { display: none }
+.tool :is(h3, .sel-name, .hint) { display: none }
 .tool .fld { margin-bottom: 6px }
 .subtabs { display: flex; gap: 6px; overflow-x: auto; scrollbar-width: none; margin: 0 0 8px; padding-bottom: 2px }
 .subtabs::-webkit-scrollbar { display: none }
@@ -487,7 +482,6 @@ body.editing .side { display: none !important }
 .subtabs button.on { color: var(--ui-accent); background: var(--ui-accent-soft); border-color: var(--ui-accent) }
 .sub { display: none }
 .sub.on { display: block }
-.sub-foot { margin-top: 4px }
 .dock-tools { display: flex; gap: 2px; overflow-x: auto; scrollbar-width: none; padding: 4px 6px }
 .dock-tools::-webkit-scrollbar { display: none }
 .dock-tools button { flex: 0 0 auto; min-width: 60px; min-height: 52px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px; padding: 4px 6px; font: inherit; font-size: .66rem; font-weight: 600; white-space: nowrap; color: var(--ui-muted); background: transparent; border: 0; border-radius: var(--ui-radius); cursor: pointer }
@@ -514,9 +508,9 @@ body.editing .side { display: none !important }
 .tool .row input[type="text"] { flex: 1; min-width: 0 }
 .tool .mini { display: flex; align-items: center; gap: 6px; flex: 1 }
 .tool .mini input { width: 76px }
-.tool :is(.seg, .grid2, .add-grid, .lib, .el-list) { display: flex; flex-direction: row; flex-wrap: nowrap; gap: 6px; overflow-x: auto; scrollbar-width: none }
-.tool :is(.seg, .grid2, .add-grid, .lib, .el-list)::-webkit-scrollbar { display: none }
-.tool :is(.seg-b, .grid2 .btn, .add-item, .lib-item, .el-row, .btn) { flex: 0 0 auto; white-space: nowrap }
+.tool :is(.seg, .grid2, .add-grid, .lib) { display: flex; flex-direction: row; flex-wrap: nowrap; gap: 6px; overflow-x: auto; scrollbar-width: none }
+.tool :is(.seg, .grid2, .add-grid, .lib)::-webkit-scrollbar { display: none }
+.tool :is(.seg-b, .grid2 .btn, .add-item, .lib-item, .btn) { flex: 0 0 auto; white-space: nowrap }
 .tool :is([data-al], .seg-b) { width: 44px; min-height: 40px; padding: 0; display: inline-flex; align-items: center; justify-content: center }
 .tool .lib-item { width: 72px }
 .tool .img-reset { margin-top: 0 !important }
@@ -525,10 +519,6 @@ body.editing .side { display: none !important }
 .sub.on { display: flex; align-items: center; gap: 10px; overflow-x: auto; scrollbar-width: none }
 .sub .side-block { flex: 1; min-width: 0 }
 .sub .chk { flex: 0 0 auto; margin: 0; white-space: nowrap }
-.tool details { display: contents }
-.tool summary { display: none }
-.tool .code-in { flex: 1 1 200px; height: 44px; min-height: 44px; resize: none }
-.tool .code-msg { flex: 0 1 auto; margin: 0; font-size: .72rem; white-space: nowrap }
 
 /* ---- Sin bordes en botones e inputs · inputs compactos · botones de fila sin ancho completo ---- */
 :is(.appbar, .proj-menu, .side, .dlg, .toast, .text-bar, .result, #busy, .card-actions) :is(button, .btn, .seg, .seg-b, .tab, .add-item, .lib-item, .subtabs button, .fmt-bar button, input:not([type="checkbox"]):not([type="radio"]), textarea, select, details, summary) { border: 0 !important }
@@ -544,7 +534,6 @@ body.editing .side { display: none !important }
 .side .tool .sub-end .btn { width: 34px; padding: 0 }
 .subtabs button { background: var(--ui-raised) }
 .subtabs button.on { background: var(--ui-accent-soft) }
-.side .tool .code-in { height: 40px; min-height: 40px }
 
 /* ---- Botones sin fondo ---- */
 :is(.appbar, .proj-menu, .side, .dlg, .toast, .text-bar, .result, #busy, .card-actions) :is(button, .btn):not(.on):not(.btn-mustard):not([aria-expanded="true"]), :is(.appbar, .proj-menu, .side, .dlg, .toast, .text-bar, .result, #busy, .card-actions) .seg-b:not(.on) { background: transparent !important; box-shadow: none }
@@ -559,6 +548,26 @@ body.editing .side { display: none !important }
 .pm-pane.on { display: flex }
 .pm-pane > b { font-size: .72rem; font-weight: 650; text-transform: uppercase; letter-spacing: .07em; color: var(--ui-muted); margin-top: 2px }
 .pm-tabs { margin: 0 }
+
+/* ---- Capas (alto, con arrastre) · pestaña de acción · modal ---- */
+.side[data-tool="layers"] .dock-panel { max-height: min(58vh, 460px) }
+.el-row .grip { flex: 0 0 auto; width: 24px; height: 30px; display: flex; align-items: center; justify-content: center; color: var(--ui-muted); cursor: grab; touch-action: none; user-select: none }
+.el-row.dragging { z-index: 3; opacity: .92; background: var(--ui-raised); box-shadow: var(--ui-pop); pointer-events: none; transition: none }
+.el-row.drop-before { box-shadow: 0 -2px 0 var(--ui-accent) }
+.el-row.drop-after { box-shadow: 0 2px 0 var(--ui-accent) }
+.subtabs button.act { color: var(--ui-accent) }
+.modal { position: fixed; inset: 0; z-index: 10100; display: none; align-items: center; justify-content: center; padding: 16px; background: rgba(0, 0, 0, .55) }
+.modal.on { display: flex }
+.modal-card { width: min(520px, 100%); max-height: calc(100vh - 32px); max-height: calc(100dvh - 32px); display: flex; flex-direction: column; gap: 10px; padding: 14px; color: var(--ui-text); font-family: 'Inter', system-ui, sans-serif; background: var(--ui-surface); border: 1px solid var(--ui-line); border-radius: 16px; box-shadow: var(--ui-pop) }
+.modal-head { display: flex; align-items: center; justify-content: space-between }
+.modal-head h3 { margin: 0; font: 650 1rem 'Inter', system-ui, sans-serif }
+.modal-x { width: 36px; height: 36px; border: 0; border-radius: 8px; color: var(--ui-muted); background: transparent; cursor: pointer }
+.modal textarea { width: 100%; min-height: 180px; resize: vertical; padding: 10px; font: .8rem/1.45 ui-monospace, SFMono-Regular, Menlo, monospace; color: var(--ui-text); background: var(--ui-raised); border: 0; border-radius: 10px }
+.modal .hint { min-height: 1.2em; margin: 0; font-size: .78rem; color: var(--ui-muted) }
+.modal .hint.err { color: #ff7a7a }
+.modal-foot { display: flex; gap: 8px; justify-content: flex-end }
+.modal-foot button { padding: 8px 14px; font: 600 .85rem 'Inter', system-ui, sans-serif; color: var(--ui-text); background: transparent; border: 0; border-radius: 10px; cursor: pointer }
+.modal-foot .primary { color: #fff; background: var(--ui-accent) }
 </style>
 </head>
 <body>
@@ -822,6 +831,14 @@ body.editing .side { display: none !important }
   </div>
 </div>
 
+<div class="modal" id="deco-modal" role="dialog" aria-modal="true" aria-labelledby="deco-title">
+  <div class="modal-card">
+    <div class="modal-head"><h3 id="deco-title">Nuevo decorativo</h3><button type="button" class="modal-x" data-close aria-label="Cerrar">✕</button></div>
+    <textarea id="deco-code" rows="8" spellcheck="false" placeholder="Pegá acá tu SVG o HTML" aria-label="Código SVG o HTML"></textarea>
+    <p class="hint" id="deco-msg" role="status"></p>
+    <div class="modal-foot"><button type="button" data-close>Cancelar</button><button type="button" class="primary" id="deco-add">Agregar a la biblioteca</button></div>
+  </div>
+</div>
 <script>
 /* ============================================================
    CONTENIDO: editá estos valores. Son placeholders, no datos reales.
@@ -1554,17 +1571,11 @@ const PANEL_HTML = `
   <div class="side-block">
     <h3>Añadir elemento</h3>
     <div class="add-grid"></div>
-    <p class="hint">Se agrega al centro de la pieza. Un sticker se pega a la foto si hay una seleccionada.</p>
+    <p class="hint">Se agrega al centro de la pieza.</p>
   </div>
   <div class="side-block">
     <h3>Decorativos</h3>
     <div class="lib"></div>
-    <details>
-      <summary>Agregar código SVG / HTML</summary>
-      <textarea class="code-in" rows="6" placeholder="Pegá acá tu SVG o HTML"></textarea>
-      <button class="btn btn-sm add-code">Agregar a la biblioteca</button>
-      <p class="hint code-msg"></p>
-    </details>
   </div>
 </div>`;
 
@@ -1601,6 +1612,14 @@ function makeRow(el, sub, isTop, isBottom) {
   name.className = 'nm';
   name.textContent = elName(el) + (locked ? ' · bloqueado' : '');
   name.addEventListener('click', () => select(el));
+  row._el = el;
+  if (!sub) {
+    const g = document.createElement('span');
+    g.className = 'grip';
+    g.setAttribute('aria-hidden', 'true');
+    g.innerHTML = '<svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor"><circle cx="9" cy="6" r="1.6"/><circle cx="15" cy="6" r="1.6"/><circle cx="9" cy="12" r="1.6"/><circle cx="15" cy="12" r="1.6"/><circle cx="9" cy="18" r="1.6"/><circle cx="15" cy="18" r="1.6"/></svg>';
+    row.appendChild(g);
+  }
   row.appendChild(name);
 
   if (!sub) {
@@ -1830,17 +1849,6 @@ function bindPanel(card) {
   q('.del').addEventListener('click', () => {
     const t = cur();
     if (t && !isLocked(t)) deleteEl(t);
-  });
-  q('.add-code').addEventListener('click', () => {
-    const raw = q('.code-in').value.trim();
-    const msg = q('.code-msg');
-    if (!raw) { msg.textContent = 'Pegá un fragmento SVG o HTML primero.'; return; }
-    if (raw.length > 20000) { msg.textContent = 'El código es demasiado largo (máximo 20000 caracteres).'; return; }
-    LIBRARY.push({ id: newLibId(), name: 'Personalizado ' + (LIBRARY.length - 3), w: 160, h: 160, html: sanitize(raw) });
-    markDirty();
-    q('.code-in').value = '';
-    msg.textContent = 'Agregado a la biblioteca (tamaño inicial 160 × 160 px).';
-    renderAllLibs();
   });
 
   /* Texto: alineación, interlineado e interletrado */
@@ -3473,10 +3481,7 @@ const ADD_ITEMS = [
   { kind: 'body',     label: 'Texto',           ico: '<svg viewBox="0 0 24 24"><path d="M4 6h16M4 10h16M4 14h16M4 18h10"/></svg>' },
   { kind: 'eyebrow',  label: 'Etiqueta',        ico: '<svg viewBox="0 0 24 24"><path d="M4 9a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2v6a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2z"/><path d="M8 12h8"/></svg>' },
   { kind: 'cta',      label: 'Botón / CTA',     ico: '<svg viewBox="0 0 24 24"><rect x="3" y="7" width="18" height="10" rx="3"/><path d="M8 12h6M12 10l2 2-2 2"/></svg>' },
-  { kind: 'handle',   label: 'Handle',          ico: '<b class="gl">@</b>' },
-  { kind: 'hashtags', label: 'Hashtags',        ico: '<b class="gl">#</b>' },
   { kind: 'photo',    label: 'Foto',            ico: '<svg viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="14" rx="2"/><circle cx="9" cy="10" r="1.6"/><path d="M4 17l5-5 4 4 3-3 4 4"/></svg>' },
-  { kind: 'sticker',  label: 'Sticker de dato', ico: '<svg viewBox="0 0 24 24"><path d="M5 5h10l4 4v10H5z"/><path d="M15 5v4h4"/></svg>' }
 ];
 
 function makeTextEl(role) {
@@ -3866,11 +3871,6 @@ function addElementTo(piece, kind, opts) {
     data = { ...base, type: 'text', role: kind, text: d.text, style: {}, layout: { mode: 'absolute', x: 0, y: 0 }, size: { width: d.w, height: null } };
   } else if (kind === 'photo') {
     data = { ...base, type: 'photo', image: null, style: {}, layout: { mode: 'absolute', x: 0, y: 0 }, size: { width: 600, height: 450 } };
-  } else if (kind === 'sticker') {
-    const ph = selected && piece.contains(selected) ? (selected.classList.contains('photo') ? selected : selected.closest('.photo')) : null;
-    data = { ...base, type: 'sticker', label: 'Dato', value: '[DATO]', style: {},
-      layout: ph ? { mode: 'attached', parentId: ph.dataset.uid, dx: 0, dy: 0 } : { mode: 'absolute', x: 0, y: 0 },
-      size: { width: null, height: null } };
   } else return null;
   const el = createUserElement(piece, data);
   if (data.layout.mode !== 'attached') placeCentered(piece, el);
@@ -3881,9 +3881,7 @@ function addElementTo(piece, kind, opts) {
 
 function addElement(card, kind) {
   const piece = card.querySelector('.piece');
-  const el = addElementTo(piece, kind);
-  if (el && isNarrow()) { card.dataset.sheet = '1'; card.dataset.open = '0'; refreshAll(); }   // la hoja queda compacta para ver el elemento
-  return el;
+  return addElementTo(piece, kind);
 }
 
 function showTab(side, name) {
@@ -3905,6 +3903,80 @@ function renderAddGrids() {
     });
   });
 }
+
+/* ---------- Decorativos: modal para agregar código SVG / HTML ---------- */
+(function () {
+  const m = document.getElementById('deco-modal'), ta = document.getElementById('deco-code'), msg = document.getElementById('deco-msg');
+  let opener = null;
+  const say = (t, err) => { msg.textContent = t; msg.classList.toggle('err', !!err); };
+  const close = () => { m.classList.remove('on'); if (opener && opener.focus) opener.focus(); };
+  window.openDecoModal = () => { opener = document.activeElement; say(''); m.classList.add('on'); ta.focus(); };
+  document.getElementById('deco-add').addEventListener('click', () => {
+    const raw = ta.value.trim();
+    if (!raw) return say('Pegá un fragmento SVG o HTML primero.', true);
+    if (raw.length > 20000) return say('El código es demasiado largo (máximo 20000 caracteres).', true);
+    LIBRARY.push({ id: newLibId(), name: 'Personalizado ' + (LIBRARY.length - 3), w: 160, h: 160, html: sanitize(raw) });
+    markDirty();
+    ta.value = '';
+    renderAllLibs();
+    close();
+  });
+  m.querySelectorAll('[data-close]').forEach(b => b.addEventListener('click', close));
+  m.addEventListener('pointerdown', e => { if (e.target === m) close(); });
+  document.addEventListener('keydown', e => {
+    if (!m.classList.contains('on')) return;
+    if (e.key === 'Escape') { e.stopPropagation(); close(); }
+    if (e.key === 'Tab') {
+      const f = Array.from(m.querySelectorAll('textarea, button')).filter(x => !x.disabled);
+      const i = f.indexOf(document.activeElement);
+      if (e.shiftKey && i <= 0) { e.preventDefault(); f[f.length - 1].focus(); }
+      else if (!e.shiftKey && i === f.length - 1) { e.preventDefault(); f[0].focus(); }
+    }
+  }, true);
+})();
+
+/* ---------- Capas: arrastrar para reordenar (reutiliza orderOp: mismo cambio de z que ▲ ▼) ---------- */
+document.addEventListener('pointerdown', e => {
+  const grip = e.target.closest && e.target.closest('.el-row .grip');
+  if (!grip || e.button > 0) return;
+  e.preventDefault();
+  const row = grip.closest('.el-row'), list = row.parentNode;
+  const rows = Array.from(list.querySelectorAll('.el-row:not(.sub)'));
+  const from = rows.indexOf(row);
+  const top0 = list.getBoundingClientRect().top, startY = e.clientY - top0;
+  const mids = rows.map(r => { const b = r.getBoundingClientRect(); return b.top - top0 + b.height / 2; });
+  const panel = list.closest('.dock-panel') || list;
+  let to = from;
+  row.classList.add('dragging');
+  const mark = () => rows.forEach((r, i) => {
+    r.classList.toggle('drop-before', i === to && to < from);
+    r.classList.toggle('drop-after', i === to && to > from);
+  });
+  const move = ev => {
+    const pr = panel.getBoundingClientRect();
+    if (ev.clientY < pr.top + 28) panel.scrollTop -= 10;
+    else if (ev.clientY > pr.bottom - 28) panel.scrollTop += 10;
+    const py = ev.clientY - list.getBoundingClientRect().top;
+    row.style.transform = 'translateY(' + (py - startY) + 'px)';
+    to = mids.reduce((best, m, i) => Math.abs(m - py) < Math.abs(mids[best] - py) ? i : best, 0);
+    mark();
+  };
+  const end = ev => {
+    document.removeEventListener('pointermove', move);
+    document.removeEventListener('pointerup', end);
+    document.removeEventListener('pointercancel', end);
+    row.classList.remove('dragging');
+    row.style.transform = '';
+    rows.forEach(r => r.classList.remove('drop-before', 'drop-after'));
+    if (ev.type === 'pointerup' && to !== from && row._el) {
+      for (let i = 0; i < Math.abs(to - from); i++) orderOp(row._el, to < from ? 'up' : 'down');
+      refreshAll();
+    }
+  };
+  document.addEventListener('pointermove', move);
+  document.addEventListener('pointerup', end);
+  document.addEventListener('pointercancel', end);
+});
 
 /* ---------- Guardado ---------- */
 function setSaveStatus(kind, msg) {
@@ -4405,10 +4477,6 @@ fitPreviews();
   menu.querySelectorAll('.fmt-bar button').forEach(b => b.addEventListener('click', () => {
     close(); if (typeof scheduleHistUI === 'function') scheduleHistUI();
   }));
-  document.querySelectorAll('.card').forEach(card => {
-    const m = card.querySelector('.m-edit');
-    if (m) m.addEventListener('click', () => { if (!isNarrow()) showTab(card.querySelector('.side'), 'props'); });
-  });
 })();
 </script>
 <script>
@@ -4433,7 +4501,6 @@ fitPreviews();
     lock: '<rect x="5" y="11" width="14" height="9" rx="2"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/>',
     del: '<path d="M5 7h14M10 7V4h4v3M7 7l1 13h8l1-13"/>',
     close: '<path d="M6 6l12 12M18 6L6 18"/>',
-    check: '<path d="M5 12.5l4.5 4.5L19 7.5"/>',
     reset: '<path d="M4 12a8 8 0 1 0 2.6-5.9"/><path d="M4 4v5h5"/>'
   };
   const svg = n => '<svg viewBox="0 0 24 24" aria-hidden="true">' + IC[n] + '</svg>';
@@ -4442,18 +4509,18 @@ fitPreviews();
     add: ['Añadir', 'add', 'p'], pagebg: ['Fondo', 'pagebg', 'p'], deco: ['Decorativos', 'deco', 'p'], layers: ['Capas', 'layers', 'p'],
     size: ['Tamaño', 'size', 'p'], color: ['Color', 'color', 'p'], bg: ['Fondo', 'bg', 'p'], align: ['Alinear', 'align', 'p'],
     spacing: ['Espaciado', 'spacing', 'p'], order: ['Orden', 'order', 'p'], arrange: ['Posición', 'arrange', 'p'], zoom: ['Zoom', 'zoom', 'p'],
-    photoUp: ['Foto', 'photo', 'a'], edit: ['Editar', 'edit', 'a'], swap: ['Cambiar', 'photo', 'a'], dup: ['Duplicar', 'dup', 'a'],
+    edit: ['Editar', 'edit', 'a'], swap: ['Cambiar', 'photo', 'a'], dup: ['Duplicar', 'dup', 'a'],
     lock: ['Bloquear', 'lock', 'a'], del: ['Eliminar', 'del', 'a'], close: ['Listo', 'close', 'a']
   };
 
   function ctxOf(card) {
     const piece = card.querySelector('.piece');
     const el = selected && piece.contains(selected) ? selected : null;
-    if (!el) return { sig: 'none', tools: ['add', 'photoUp', 'pagebg', 'deco', 'layers'] };
+    if (!el) return { sig: 'none', tools: ['add', 'pagebg', 'deco', 'layers'] };
     const locked = isLocked(el), photo = el.classList.contains('photo'), st = el.classList.contains('pc-sticker'), txt = !!el.dataset.f;
     let t, k;
     if (locked) { k = 'L'; t = ['lock', 'dup']; }
-    else if (photo) { k = 'P'; t = ['swap', 'zoom', 'order', 'arrange', 'add', 'dup', 'lock', 'del']; }
+    else if (photo) { k = 'P'; t = ['swap', 'zoom', 'order', 'arrange', 'dup', 'lock', 'del']; }
     else if (st) { k = 'S'; t = ['edit', 'color', 'bg', 'arrange', 'lock', 'del']; }
     else if (txt) { k = 'T'; t = ['edit', 'size', 'color', 'bg', 'align', 'spacing', 'order', 'arrange', 'dup', 'lock', 'del']; }
     else { k = 'O'; t = ['color', 'bg', 'order', 'arrange', 'dup', 'lock', 'del']; }
@@ -4486,23 +4553,24 @@ fitPreviews();
       const strip = document.createElement('div');
       strip.className = 'subtabs';
       strip.setAttribute('role', 'tablist');
-      const subs = tabs.map(([label, nodes, cls]) => {
+      const subs = tabs.map(([label, nodes, cls, act]) => {
         const b = document.createElement('button');
         b.type = 'button';
         b.textContent = label;
         b.setAttribute('role', 'tab');
+        if (act) b.classList.add('act');
         const p = document.createElement('div');
         p.className = 'sub ' + (cls || '');
         nodes.filter(Boolean).forEach(n => p.appendChild(n));
         strip.appendChild(b);
-        return { b, p };
+        return { b, p, act };
       });
       const pick = i => subs.forEach((x, j) => {
         x.b.classList.toggle('on', i === j);
         x.p.classList.toggle('on', i === j);
         x.b.setAttribute('aria-selected', i === j ? 'true' : 'false');
       });
-      subs.forEach((x, i) => x.b.addEventListener('click', () => pick(i)));
+      subs.forEach((x, i) => x.b.addEventListener('click', () => (x.act ? x.act() : pick(i))));
       const row = document.createElement('div');
       row.className = 'subtabs-row';
       row.appendChild(strip);
@@ -4513,7 +4581,7 @@ fitPreviews();
         row.appendChild(f);
       }
       d.appendChild(row);
-      subs.forEach(x => d.appendChild(x.p));
+      subs.forEach(x => { if (!x.act) d.appendChild(x.p); });
       body.appendChild(d);
       pick(0);
     };
@@ -4544,14 +4612,14 @@ fitPreviews();
       ['X / Y', [fld('.x-n')]],
       ['Giro', [fld('.rot-n')]]
     ]);
-    box('layers', [blk('.el-list')]); box('add', [blk('.add-grid')]); tabbed('deco', [['Biblioteca', [q('.lib')]], ['Código', [q('details')]]]);
-    const dt = q('details'); if (dt) dt.open = true;
+    box('layers', [blk('.el-list')]); box('add', [blk('.add-grid')]); tabbed('deco', [['Biblioteca', [q('.lib')]], ['+ Nuevo', [], '', () => openDecoModal()]]);
 
     const st = card._dock = { sig: null, tool: '' };
     const mark = () => bar.querySelectorAll('button[data-t]').forEach(b => b.classList.toggle('on', b.dataset.t === st.tool));
     const setTool = name => {
       st.tool = name;
       side.classList.toggle('dock-open', !!name);
+      side.dataset.tool = name;
       body.querySelectorAll('.tool').forEach(t => t.classList.toggle('on', t.dataset.tool === name));
       mark();
     };
@@ -4561,8 +4629,7 @@ fitPreviews();
       const t = b.dataset.t, click = s => { const n = q(s); if (n) n.click(); };
       if (T[t][2] === 'p') return setTool(st.tool === t ? '' : t);
       setTool('');
-      if (t === 'photoUp') { const l = card.querySelector('.card-actions label'); if (l) l.click(); }
-      else if (t === 'edit') click('[data-q="edit"]');
+      if (t === 'edit') click('[data-q="edit"]');
       else if (t === 'swap') click('[data-q="photo"]');
       else if (t === 'dup') click('[data-q="dup"]');
       else if (t === 'lock') click('[data-q="lock"]');
