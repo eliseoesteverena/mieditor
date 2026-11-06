@@ -569,6 +569,148 @@ body.editing .side { display: none !important }
 .modal-foot button { padding: 8px 14px; font: 600 .85rem 'Inter', system-ui, sans-serif; color: var(--ui-text); background: transparent; border: 0; border-radius: 10px; cursor: pointer }
 .modal-foot .primary { color: #fff; background: var(--ui-accent) }
 </style>
+<script>
+/* Tipografía con Google Fonts (API CSS2): lista + búsqueda, carga bajo demanda, formato (negrita, cursiva…) */
+window.IGFont = (function () {
+  const F = [['Inter','Sans'],['Poppins','Sans'],['Montserrat','Sans'],['Roboto','Sans'],['Open Sans','Sans'],['Lato','Sans'],['Nunito','Sans'],['Raleway','Sans'],['Work Sans','Sans'],['DM Sans','Sans'],['Manrope','Sans'],['Outfit','Sans'],['Plus Jakarta Sans','Sans'],['Rubik','Sans'],['Barlow','Sans'],['Space Grotesk','Sans'],['Sora','Sans'],['Urbanist','Sans'],
+    ['Fraunces','Serif'],['Playfair Display','Serif'],['Merriweather','Serif'],['Lora','Serif'],['DM Serif Display','Serif'],['Cormorant Garamond','Serif'],['Libre Baskerville','Serif'],['EB Garamond','Serif'],['Bitter','Serif'],['Crimson Text','Serif'],['Abril Fatface','Serif'],
+    ['Bebas Neue','Display'],['Anton','Display'],['Oswald','Display'],['Lobster','Display'],['Righteous','Display'],['Archivo Black','Display'],['Alfa Slab One','Display'],['Bungee','Display'],['Fredoka','Display'],['Baloo 2','Display'],['Chewy','Display'],['Permanent Marker','Display'],['Monoton','Display'],['Rubik Mono One','Display'],['Staatliches','Display'],['Unbounded','Display'],
+    ['Pacifico','Manuscrita'],['Dancing Script','Manuscrita'],['Caveat','Manuscrita'],['Satisfy','Manuscrita'],['Great Vibes','Manuscrita'],['Shadows Into Light','Manuscrita'],['Indie Flower','Manuscrita'],['Amatic SC','Manuscrita'],['Sacramento','Manuscrita'],['Kalam','Manuscrita'],['Courgette','Manuscrita'],
+    ['Space Mono','Mono'],['JetBrains Mono','Mono'],['IBM Plex Mono','Mono'],['Roboto Mono','Mono'],['Fira Code','Mono'],['Courier Prime','Mono']];
+  const CATS = ['Todas','Sans','Serif','Display','Manuscrita','Mono'];
+  const FB = { Sans: 'sans-serif', Serif: 'serif', Display: 'sans-serif', Manuscrita: 'cursive', Mono: 'monospace' };
+  const cat = n => (F.find(f => f[0] === n) || [0, 'Sans'])[1];
+  const stack = n => "'" + n + "', " + FB[cat(n)];
+  const cssFam = el => (getComputedStyle(el).fontFamily || '').split(',')[0].replace(/["']/g, '').trim();
+  const famOf = el => (el.style.fontFamily || '').split(',')[0].replace(/["']/g, '').trim();
+  const esc = t => t.replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+  const title = t => t.toLowerCase().replace(/(^|\s)\S/g, c => c.toUpperCase());
+  const sel = () => (typeof selected !== 'undefined' && selected && selected.dataset && selected.dataset.f) ? selected : null;
+  const after = () => { try { updateBox(); } catch (_) {} try { fitPreviews(); } catch (_) {} };
+  const inst = [];
+  const sync = () => inst.forEach(f => f());
+
+  /* Carga de la familia completa (con cursiva y negrita si existen). Devuelve 0/1/2 (variantes) o -1 si no existe. */
+  const loaded = {};
+  function ensure(name) {
+    if (!name || !/^[A-Za-z0-9 ]{1,60}$/.test(name)) return Promise.resolve(-1);
+    if (loaded[name]) return loaded[name];
+    const fam = 'family=' + name.trim().replace(/ /g, '+');
+    const tries = [fam + ':ital,wght@0,400;0,700;1,400;1,700', fam + ':wght@400;700', fam];
+    return (loaded[name] = (async () => {
+      for (let i = 0; i < tries.length; i++) {
+        const ok = await new Promise(res => {
+          const l = document.createElement('link');
+          l.rel = 'stylesheet'; l.dataset.igfont = name;
+          l.href = 'https://fonts.googleapis.com/css2?' + tries[i] + '&display=swap';
+          l.onload = () => res(true);
+          l.onerror = () => { l.remove(); res(false); };
+          document.head.appendChild(l);
+        });
+        if (ok) {
+          try { fontCssText = null; } catch (_) {}      // la exportación vuelve a leer las hojas de Google Fonts
+          try { await document.fonts.load('16px "' + name + '"'); } catch (_) {}
+          return i;
+        }
+      }
+      delete loaded[name];
+      return -1;
+    })());
+  }
+
+  /* Vistas previas: el nombre de cada fuente escrito en su propia fuente (solo las letras necesarias; familia renombrada "pv …") */
+  let pv = false;
+  function previews() {
+    if (pv) return;
+    pv = true;
+    const names = F.map(f => f[0]), txt = [...new Set(names.join('').split(''))].join('');
+    for (let i = 0; i < names.length; i += 15) {
+      const u = 'https://fonts.googleapis.com/css2?' + names.slice(i, i + 15).map(n => 'family=' + n.replace(/ /g, '+')).join('&') + '&text=' + encodeURIComponent(txt) + '&display=swap';
+      fetch(u).then(r => r.ok ? r.text() : '').then(css => {
+        if (!css) return;
+        const st = document.createElement('style');
+        st.textContent = css.replace(/font-family:\s*'([^']+)'/g, "font-family:'pv $1'");
+        document.head.appendChild(st);
+      }).catch(() => {});
+    }
+  }
+  document.addEventListener('click', e => { if (e.target.closest && e.target.closest('[data-t="font"]')) previews(); });
+
+  const FM = [
+    ['bold', 'Negrita', '<path d="M7 5h6a3.5 3.5 0 0 1 0 7H7zM7 12h7a3.5 3.5 0 0 1 0 7H7z"/>'],
+    ['italic', 'Cursiva', '<path d="M10 5h8M6 19h8M14 5l-4 14"/>'],
+    ['underline', 'Subrayado', '<path d="M7 4v7a5 5 0 0 0 10 0V4M5 20h14"/>'],
+    ['strike', 'Tachado', '<path d="M4 12h16M16 7.5C15.5 5.7 14 5 12 5c-2.2 0-4 1-4 3M8.3 16.2c.5 1.9 2.1 2.8 4.3 2.8 2.2 0 4-1 4-3"/>'],
+    ['upper', 'Mayúsculas', '<path d="M4 7V5h10v2M9 5v14M17 11V9h5v2M19.5 9v10"/>']
+  ];
+  const flags = el => {
+    const cs = getComputedStyle(el), dl = cs.textDecorationLine || cs.textDecoration || '';
+    return { bold: parseInt(cs.fontWeight, 10) >= 600, italic: cs.fontStyle === 'italic', underline: /underline/.test(dl), strike: /line-through/.test(dl), upper: cs.textTransform === 'uppercase' };
+  };
+
+  function panel(kind) {
+    const d = document.createElement('div');
+    if (kind === 'format') {
+      d.className = 'seg ff-fmt';
+      d.innerHTML = FM.map(f => '<button type="button" class="seg-b has-t" data-fm="' + f[0] + '" aria-pressed="false"><svg viewBox="0 0 24 24" aria-hidden="true">' + f[2] + '</svg><span class="ib-t">' + f[1] + '</span></button>').join('');
+      const mark = () => { const el = sel(), fl = el ? flags(el) : {}; d.querySelectorAll('[data-fm]').forEach(b => { const on = !!fl[b.dataset.fm]; b.classList.toggle('on', on); b.setAttribute('aria-pressed', on); }); };
+      d.addEventListener('click', e => {
+        const b = e.target.closest('[data-fm]'), el = sel();
+        if (!b || !el) return;
+        const k = b.dataset.fm, fl = flags(el), on = !fl[k], z = el.style;
+        if (k === 'bold') z.fontWeight = on ? '700' : '400';
+        else if (k === 'italic') z.fontStyle = on ? 'italic' : 'normal';
+        else if (k === 'upper') z.textTransform = on ? 'uppercase' : 'none';
+        else {
+          const u = k === 'underline' ? on : fl.underline, l = k === 'strike' ? on : fl.strike;
+          z.textDecoration = [u && 'underline', l && 'line-through'].filter(Boolean).join(' ') || 'none';
+        }
+        after(); sync();
+      });
+      inst.push(mark); mark();
+      return d;
+    }
+    let q = '', c = 'Todas';
+    d.className = 'ff-wrap';
+    d.innerHTML = '<div class="ff-head"><input class="ff-q" type="search" placeholder="Buscar en Google Fonts…" autocomplete="off" autocapitalize="off" spellcheck="false" aria-label="Buscar fuente">' +
+      '<div class="subtabs">' + CATS.map(x => '<button type="button" data-c="' + x + '">' + x + '</button>').join('') + '</div></div><div class="ff-list" role="listbox" aria-label="Fuentes"></div>';
+    const list = d.querySelector('.ff-list');
+    const row = (n, label, sub, ext) => '<button type="button" role="option" class="ff-i" data-ff="' + esc(n) + '"' + (ext ? ' data-ext="1"' : '') + '><span class="ff-n"' +
+      (n && !ext ? ' style="font-family:\'pv ' + esc(n) + '\',\'' + esc(n) + '\',' + FB[cat(n)] + '"' : '') + '>' + esc(label) + '</span>' + (ext ? '<small>' + sub + '</small>' : '') + '</button>';
+    let extra = '';
+    const mark = () => {
+      const el = sel(), cur = el ? cssFam(el) : '', want = cur && !F.some(f => f[0] === cur) ? cur : '';
+      if (want !== extra) return render();      // la fuente en uso no está en la lista: se muestra arriba, seleccionada
+      list.querySelectorAll('.ff-i').forEach(b => { const on = !b.dataset.ext && b.dataset.ff === cur; b.classList.toggle('on', on); b.setAttribute('aria-selected', on); });
+      d.querySelectorAll('[data-c]').forEach(b => b.classList.toggle('on', b.dataset.c === c));
+    };
+    const render = () => {
+      const k = q.trim().toLowerCase(), rows = F.filter(f => (c === 'Todas' || f[1] === c) && f[0].toLowerCase().includes(k));
+      const el = sel(), cur = el ? cssFam(el) : '';
+      extra = cur && !F.some(f => f[0] === cur) ? cur : '';
+      let h = extra && !k && c === 'Todas' ? row(extra, extra, '') : '';
+      h += rows.map(f => row(f[0], f[0], f[1])).join('');
+      if (k && /^[A-Za-z0-9 ]{1,60}$/.test(q.trim()) && !F.some(f => f[0].toLowerCase() === k)) h += row(title(q.trim()), 'Usar «' + title(q.trim()) + '» de Google Fonts', 'Buscar', true);
+      list.innerHTML = h || '<p class="ff-empty">Sin resultados</p>';
+      mark();
+    };
+    d.querySelector('.ff-q').addEventListener('input', e => { q = e.target.value; render(); });
+    d.addEventListener('click', e => {
+      const t = e.target.closest('[data-c]');
+      if (t) { c = t.dataset.c; return render(); }
+      const b = e.target.closest('.ff-i'), el = sel();
+      if (!b || !el) return;
+      const n = b.dataset.ff;
+      el.style.fontFamily = n ? stack(n) : '';
+      if (n) ensure(n).then(r => { if (r < 0) { el.style.fontFamily = ''; let sm = b.querySelector('small'); if (!sm) { sm = document.createElement('small'); b.appendChild(sm); } sm.textContent = 'No encontrada'; } after(); sync(); });
+      after(); sync();
+    });
+    inst.push(mark); render();
+    return d;
+  }
+  return { panel, sync, ensure, stack };
+})();
+</script>
 </head>
 <body>
 
@@ -2932,6 +3074,35 @@ const PROJECT_SCHEMA = /*SCHEMA_START*/{
           "minimum": -1,
           "maximum": 3,
           "description": "Espaciado entre letras en em."
+        },
+        "fontFamily": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9 ]{1,60}$",
+          "description": "Familia de Google Fonts. Si falta, se usa la tipografía de la marca."
+        },
+        "fontWeight": {
+          "type": "integer",
+          "minimum": 100,
+          "maximum": 900
+        },
+        "fontStyle": {
+          "enum": [
+            "italic"
+          ]
+        },
+        "textDecoration": {
+          "enum": [
+            "underline",
+            "line-through",
+            "underline line-through"
+          ]
+        },
+        "textTransform": {
+          "enum": [
+            "uppercase",
+            "lowercase",
+            "capitalize"
+          ]
         }
       }
     },
@@ -3536,6 +3707,12 @@ function applyTextStyle(el, st) {
   s.background = st.background || '';
   s.lineHeight = st.lineHeight != null ? String(st.lineHeight) : '';
   s.letterSpacing = st.letterSpacing != null ? st.letterSpacing + 'em' : '';
+  s.fontFamily = st.fontFamily ? IGFont.stack(st.fontFamily) : '';
+  if (st.fontFamily) IGFont.ensure(st.fontFamily).then(() => { try { fitPreviews(); } catch (_) {} });
+  s.fontWeight = st.fontWeight != null ? String(st.fontWeight) : '';
+  s.fontStyle = st.fontStyle || '';
+  s.textDecoration = st.textDecoration || '';
+  s.textTransform = st.textTransform || '';
   setAlign(el, st.textAlign);
 }
 
@@ -3554,6 +3731,13 @@ function readTextStyle(el) {
   if (s.textAlign) st.textAlign = s.textAlign;
   if (s.lineHeight && /^[\d.]+$/.test(s.lineHeight)) st.lineHeight = r2(parseFloat(s.lineHeight));
   if (/em$/.test(s.letterSpacing)) st.letterSpacing = Math.round(parseFloat(s.letterSpacing) * 1000) / 1000;
+  const ff = (s.fontFamily || '').split(',')[0].replace(/["']/g, '').trim();
+  if (/^[A-Za-z0-9 ]{1,60}$/.test(ff)) st.fontFamily = ff;
+  if (/^\d+$/.test(s.fontWeight)) st.fontWeight = Math.min(900, Math.max(100, +s.fontWeight));
+  if (s.fontStyle === 'italic') st.fontStyle = 'italic';
+  const dl = (/underline/.test(s.textDecoration) ? 'underline' : '') + (/line-through/.test(s.textDecoration) ? (/underline/.test(s.textDecoration) ? ' ' : '') + 'line-through' : '');
+  if (dl) st.textDecoration = dl;
+  if (s.textTransform && s.textTransform !== 'none') st.textTransform = s.textTransform;
   return st;
 }
 
@@ -4512,12 +4696,14 @@ fitPreviews();
     del: '<path d="M5 7h14M10 7V4h4v3M7 7l1 13h8l1-13"/>',
     close: '<path d="M6 6l12 12M18 6L6 18"/>',
     reset: '<path d="M4 12a8 8 0 1 0 2.6-5.9"/><path d="M4 4v5h5"/>',
-    ratio: '<rect x="5" y="3" width="14" height="18" rx="2"/><path d="M9 7h3M12 17h3"/>'
+    ratio: '<rect x="5" y="3" width="14" height="18" rx="2"/><path d="M9 7h3M12 17h3"/>',
+    font: '<path d="M6 20l6-16 6 16M8.6 14h6.8M4 20h4M16 20h4"/>',
+    format: '<path d="M7 5h6a3.5 3.5 0 0 1 0 7H7zM7 12h7a3.5 3.5 0 0 1 0 7H7z"/>'
   };
   const svg = n => '<svg viewBox="0 0 24 24" aria-hidden="true">' + IC[n] + '</svg>';
   /* id: [etiqueta, icono, tipo]  (p = abre panel, a = acción) */
   const T = {
-    add: ['Añadir', 'add', 'p'], pagebg: ['Fondo', 'pagebg', 'p'], deco: ['Decorativos', 'deco', 'p'], layers: ['Capas', 'layers', 'p'], ratio: ['Proporción', 'ratio', 'p'],
+    add: ['Añadir', 'add', 'p'], pagebg: ['Fondo', 'pagebg', 'p'], deco: ['Decorativos', 'deco', 'p'], layers: ['Capas', 'layers', 'p'], ratio: ['Proporción', 'ratio', 'p'], font: ['Fuente', 'font', 'p'], format: ['Formato', 'format', 'p'],
     size: ['Tamaño', 'size', 'p'], color: ['Color', 'color', 'p'], bg: ['Fondo', 'bg', 'p'], align: ['Alinear', 'align', 'p'],
     spacing: ['Espaciado', 'spacing', 'p'], order: ['Orden', 'order', 'p'], arrange: ['Posición', 'arrange', 'p'], zoom: ['Zoom', 'zoom', 'p'],
     edit: ['Editar', 'edit', 'a'], swap: ['Cambiar', 'photo', 'a'], dup: ['Duplicar', 'dup', 'a'],
@@ -4553,7 +4739,7 @@ fitPreviews();
     if (locked) { k = 'L'; t = ['lock', 'dup']; }
     else if (photo) { k = 'P'; t = ['swap', 'zoom', 'order', 'arrange', 'dup', 'lock', 'del']; }
     else if (st) { k = 'S'; t = ['edit', 'color', 'bg', 'arrange', 'lock', 'del']; }
-    else if (txt) { k = 'T'; t = ['edit', 'size', 'color', 'bg', 'align', 'spacing', 'order', 'arrange', 'dup', 'lock', 'del']; }
+    else if (txt) { k = 'T'; t = ['edit', 'font', 'format', 'size', 'color', 'bg', 'align', 'spacing', 'order', 'arrange', 'dup', 'lock', 'del']; }
     else { k = 'O'; t = ['color', 'bg', 'order', 'arrange', 'dup', 'lock', 'del']; }
     return { sig: k + (el.dataset.uid || ''), tools: ['close'].concat(t), locked };
   }
@@ -4643,7 +4829,7 @@ fitPreviews();
       ['X / Y', [fld('.x-n')]],
       ['Giro', [fld('.rot-n')]]
     ]);
-    box('layers', [blk('.el-list')]); box('ratio', [buildRatio(card, () => setTool(''))]); box('add', [blk('.add-grid')]); tabbed('deco', [['Biblioteca', [q('.lib')]], ['+ Nuevo', [], '', () => openDecoModal()]]);
+    box('font', [IGFont.panel('font')]); box('format', [IGFont.panel('format')]); box('layers', [blk('.el-list')]); box('ratio', [buildRatio(card, () => setTool(''))]); box('add', [blk('.add-grid')]); tabbed('deco', [['Biblioteca', [q('.lib')]], ['+ Nuevo', [], '', () => openDecoModal()]]);
 
     const st = card._dock = { sig: null, tool: '' };
     const mark = () => bar.querySelectorAll('button[data-t]').forEach(b => b.classList.toggle('on', b.dataset.t === st.tool));
@@ -5078,5 +5264,26 @@ html body .ratio-list button.on{background:var(--ui-accent-soft)}
 /* Zoom de vista con pellizco, también sin selección: el scroll con un dedo sigue igual, el zoom de página del navegador se desactiva sobre la pieza */
 .stage,.stage .piece{touch-action:pan-x pan-y}
 </style>
+<style>
+/* ===== Fuente y formato de texto ===== */
+.ff-wrap{width:100%}
+.ff-head{position:sticky;top:0;z-index:2;display:flex;flex-direction:column;gap:6px;padding:2px 0 8px;background:var(--ui-surface,#fff)}
+.ff-q{width:100%;box-sizing:border-box;height:44px;padding:0 4px;border:0;border-radius:0;background:transparent !important;box-shadow:inset 0 -1.5px 0 var(--ui-line);font:inherit;font-size:16px;color:var(--ui-text);outline:none}
+.ff-head .subtabs{flex-wrap:nowrap;overflow-x:auto;scrollbar-width:none;justify-content:flex-start}
+.ff-head .subtabs::-webkit-scrollbar{display:none}
+.ff-list{display:flex;flex-direction:column;gap:0}
+html body .ff-list button.ff-i{display:flex;align-items:center;justify-content:space-between;gap:12px;width:100%;min-height:38px;padding:2px 12px;border-radius:12px;text-align:left;font:inherit;cursor:pointer}
+html body .ff-list button.ff-i.on{background:var(--ui-accent-soft)}
+.ff-n{min-width:0;font-size:.82rem;line-height:1.25;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.ff-i small{flex:0 0 auto;font-size:.72rem;opacity:.7}
+.ff-empty{margin:0;padding:12px 16px;color:var(--ui-muted)}
+</style>
+<script>
+(function () {
+  const _ra = refreshAll;
+  refreshAll = function () { const r = _ra.apply(this, arguments); IGFont.sync(); return r; };
+  IGFont.sync();
+})();
+</script>
 </body>
 </html>
