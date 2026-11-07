@@ -55,7 +55,7 @@ body { font-family: 'Inter', system-ui, sans-serif; background: var(--paper); co
 .stage { position: relative; overflow: hidden; width: 100%; border: 1.5px solid var(--ink); border-radius: var(--radius); background: var(--paper-2) }
 
 /* ---- Pieza (tamaño nativo 1080 px de ancho) ---- */
-.piece { position: relative; isolation: isolate; width: 1080px; overflow: hidden; background: var(--paper); color: var(--ink); font-family: 'Inter', system-ui, sans-serif; line-height: 1.5; transform-origin: 0 0 }
+.piece, .pg-mini { position: relative; isolation: isolate; width: 1080px; overflow: hidden; background: var(--paper); color: var(--ink); font-family: 'Inter', system-ui, sans-serif; line-height: 1.5; transform-origin: 0 0 }
 .p-4x5 { height: 1350px }
 .p-3x4 { height: 1440px }
 .p-1x1 { height: 1080px }
@@ -114,7 +114,7 @@ body { font-family: 'Inter', system-ui, sans-serif; background: var(--paper); co
 .show-guides .guide { display: block }
 
 /* Elementos arrastrables, editables y seleccionables (solo vista previa) */
-.piece .drag:not(.pc-sticker):not(.deco) { position: relative }
+:is(.piece, .pg-mini) .drag:not(.pc-sticker):not(.deco) { position: relative }
 .drag { cursor: move; touch-action: pan-y pinch-zoom; -webkit-touch-callout: none; -webkit-user-select: none; user-select: none }
 @media (hover: hover) { .drag:hover { outline: calc(1.5px * var(--inv, 1)) dashed var(--ink); outline-offset: calc(6px * var(--inv, 1)) } }
 .drag.editing { cursor: text; outline: calc(1.5px * var(--inv, 1)) solid var(--ink); outline-offset: calc(6px * var(--inv, 1)); -webkit-user-select: text; user-select: text }
@@ -283,7 +283,7 @@ body.has-sheet .toast { bottom: calc(150px + env(safe-area-inset-bottom, 0px)) }
 .sg.h { height: calc(1.5px * var(--inv, 1)); margin-top: calc(-0.75px * var(--inv, 1)) }
 
 /* Los textos respetan los saltos de línea que se escriben con Enter */
-.piece [data-f] { white-space: pre-line }
+:is(.piece, .pg-mini) [data-f] { white-space: pre-line }
 
 /* ---- Proyecto: barra, estado y diálogo ---- */
 .projbar { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 14px; margin: 24px 0 0 }
@@ -740,9 +740,16 @@ window.IGFont = (function () {
       <button class="btn btn-ghost btn-sm" id="reset-pos">Restablecer posiciones</button>
     </div>
     <div class="pm-pane" data-pm="export">
-      <label class="toggle"><input type="checkbox" id="hi-res"> Exportar JPG en 2x (2160 px de ancho)</label>
-      <button class="btn btn-sm" data-dl="jpg">Descargar JPG</button>
-      <button class="btn btn-sm btn-mustard" data-dl="svg">Descargar SVG</button>
+      <div class="ex-field"><label for="ex-type">Tipo de archivo</label>
+        <select id="ex-type"><option value="jpg">JPG · imagen</option><option value="pdf">PDF · documento</option><option value="svg">SVG · vector (texto editable)</option></select></div>
+      <div class="ex-field" data-ex="q"><span class="ex-l">Calidad</span>
+        <div class="subtabs ex-seg" id="ex-q"><button type="button" data-v="estandar">Estándar</button><button type="button" data-v="alta">Alta</button><button type="button" data-v="maxima">Máxima</button></div></div>
+      <div class="ex-field" data-ex="p"><span class="ex-l">Páginas</span>
+        <div class="subtabs ex-seg" id="ex-p"><button type="button" data-v="all">Todas (<span id="ex-n">1</span>)</button><button type="button" data-v="one">Esta página</button></div></div>
+      <label class="toggle" data-ex="split"><input type="checkbox" id="ex-split"> Páginas como archivos separados</label>
+      <p class="ex-sum" id="ex-sum"></p>
+      <button type="button" class="btn btn-mustard" id="ex-go">Descargar</button>
+      <input type="checkbox" id="hi-res" hidden>
     </div>
   </div>
 </header>
@@ -797,143 +804,6 @@ window.IGFont = (function () {
     </div>
   </section>
 
-  <!-- ============================================================
-       FEED TALL · 3:4 · 1080 × 1440
-       Estructura: foto a sangre de 680px arriba (sin márgenes) →
-       bloque de texto con eyebrow, título, subtítulo, cuerpo, pie.
-       Padding del texto: 56 / 80 / 80.
-       ============================================================ -->
-  <section class="card" data-fmt="3x4">
-    <div class="card-head">
-      <div class="card-meta">
-        <span class="tag tag-mint">Feed Tall</span>
-        <span class="meta-txt">3:4 · 1080 × 1440 px · Máximo espacio feed</span>
-      </div>
-      <div class="card-actions">
-        <label class="btn btn-ghost btn-sm"><input type="file" accept="image/*" data-target="ph-3x4" hidden>Subir foto</label>
-        <button class="btn btn-sm" data-jpg="post-3x4">Descargar JPG</button>
-        <button class="btn btn-sm btn-mustard" data-svg="post-3x4">Descargar SVG</button>
-      </div>
-    </div>
-    <div class="stage">
-      <div class="piece p-3x4" id="post-3x4">
-        <div class="rainbow-bar pc-top"></div>
-        <div class="pc-col">
-          <figure class="photo bleed" id="ph-3x4">
-            <div class="ph-img"></div>
-            <div class="photo-ph"><span>Foto 3:4</span></div>
-            <div class="pc-sticker"><small data-f="datoLabel"></small><b data-f="datoValor"></b></div>
-          </figure>
-          <div class="pc-text">
-            <div class="pc-head">
-              <span class="tag" data-f="eyebrow"></span>
-              <span class="pc-handle" data-f="handle"></span>
-            </div>
-            <h2 class="pc-title" data-f="title"></h2>
-            <p class="pc-sub" data-f="subtitle"></p>
-            <p class="pc-body" data-f="body"></p>
-            <div class="pc-foot">
-              <span class="pc-cta" data-f="cta"></span>
-              <span class="pc-tags" data-f="hashtags"></span>
-            </div>
-          </div>
-        </div>
-        <div class="guide" style="left:80px;top:80px;right:80px;bottom:80px"></div>
-      </div>
-    </div>
-  </section>
-
-  <!-- ============================================================
-       FEED SQUARE · 1:1 · 1080 × 1080
-       Estructura: dos columnas. Izquierda: foto 440px de ancho a alto completo.
-       Derecha: eyebrow + handle → título → subtítulo → cuerpo → pie (CTA).
-       Padding 64px. Texto a la derecha de ~464px de ancho.
-       ============================================================ -->
-  <section class="card" data-fmt="1x1">
-    <div class="card-head">
-      <div class="card-meta">
-        <span class="tag tag-mint">Feed Square</span>
-        <span class="meta-txt">1:1 · 1080 × 1080 px · Cuadrado</span>
-      </div>
-      <div class="card-actions">
-        <label class="btn btn-ghost btn-sm"><input type="file" accept="image/*" data-target="ph-1x1" hidden>Subir foto</label>
-        <button class="btn btn-sm" data-jpg="post-1x1">Descargar JPG</button>
-        <button class="btn btn-sm btn-mustard" data-svg="post-1x1">Descargar SVG</button>
-      </div>
-    </div>
-    <div class="stage">
-      <div class="piece p-1x1" id="post-1x1">
-        <div class="rainbow-bar pc-top"></div>
-        <div class="pc-col">
-          <figure class="photo" id="ph-1x1">
-            <div class="ph-img"></div>
-            <div class="photo-ph"><span>Foto 1:1</span></div>
-            <div class="pc-sticker"><small data-f="datoLabel"></small><b data-f="datoValor"></b></div>
-          </figure>
-          <div class="pc-text">
-            <div class="pc-head">
-              <span class="tag" data-f="eyebrow"></span>
-              <span class="pc-handle" data-f="handle"></span>
-            </div>
-            <h2 class="pc-title" data-f="title"></h2>
-            <p class="pc-sub" data-f="subtitle"></p>
-            <p class="pc-body" data-f="body"></p>
-            <div class="pc-foot">
-              <span class="pc-cta" data-f="cta"></span>
-              <span class="pc-tags" data-f="hashtags"></span>
-            </div>
-          </div>
-        </div>
-        <div class="guide" style="left:64px;top:64px;right:64px;bottom:64px"></div>
-      </div>
-    </div>
-  </section>
-
-  <!-- ============================================================
-       STORIES / REELS · 9:16 · 1080 × 1920
-       Estructura: zona central segura (top 260 / bottom 340, laterales 80).
-       Orden: encabezado → foto 480px → título → subtítulo → cuerpo → pie.
-       Los valores de la zona de UI son orientativos; verificar en la app.
-       ============================================================ -->
-  <section class="card" data-fmt="9x16">
-    <div class="card-head">
-      <div class="card-meta">
-        <span class="tag tag-mint">Stories / Reels</span>
-        <span class="meta-txt">9:16 · 1080 × 1920 px · Zona segura central</span>
-      </div>
-      <div class="card-actions">
-        <label class="btn btn-ghost btn-sm"><input type="file" accept="image/*" data-target="ph-9x16" hidden>Subir foto</label>
-        <button class="btn btn-sm" data-jpg="post-9x16">Descargar JPG</button>
-        <button class="btn btn-sm btn-mustard" data-svg="post-9x16">Descargar SVG</button>
-      </div>
-    </div>
-    <div class="stage">
-      <div class="piece p-9x16" id="post-9x16">
-        <div class="rainbow-bar pc-top"></div>
-        <div class="pc-col">
-          <div class="pc-head">
-            <span class="tag" data-f="eyebrow"></span>
-            <span class="pc-handle" data-f="handle"></span>
-          </div>
-          <figure class="photo" id="ph-9x16">
-            <div class="ph-img"></div>
-            <div class="photo-ph"><span>Foto 9:16</span></div>
-            <div class="pc-sticker"><small data-f="datoLabel"></small><b data-f="datoValor"></b></div>
-          </figure>
-          <div class="pc-text">
-            <h2 class="pc-title" data-f="title"></h2>
-            <p class="pc-sub" data-f="subtitle"></p>
-            <p class="pc-body" data-f="body"></p>
-            <div class="pc-foot">
-              <span class="pc-cta" data-f="cta"></span>
-              <span class="pc-tags" data-f="hashtags"></span>
-            </div>
-          </div>
-        </div>
-        <div class="guide" style="left:80px;top:250px;right:80px;bottom:340px"></div>
-      </div>
-    </div>
-  </section>
 
 </div>
 
@@ -1026,6 +896,13 @@ function fillContent() {
 }
 
 /* Escala cada pieza para que quepa en pantalla (solo vista previa) */
+/* Alto disponible para ver la página completa entre la barra superior, el carrusel y la barra inferior */
+function availH() {
+  const ab = document.querySelector('.appbar');
+  const pg = parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--pg-h')) || 0;
+  return Math.max(240, window.innerHeight - (ab ? ab.offsetHeight : 56) - pg - (isNarrow() ? 76 : 0) - 32);
+}
+
 function fitPreviews() {
   const narrow = isNarrow();
   const maxH = window.innerHeight * 0.85;
@@ -1035,7 +912,7 @@ function fitPreviews() {
     const piece = stage.querySelector('.piece');
     const h = piece.offsetHeight;
     // En móvil se ajusta solo al ancho: el alto de la ventana cambia al scrollear (barras del navegador)
-    const s0 = Math.min(1, stage.clientWidth / 1080, narrow ? Infinity : maxH / h);
+    const s0 = Math.min(1, stage.clientWidth / 1080, availH() / h);
     const z = Math.max(1, parseFloat(piece.dataset.vz) || 1), s = s0 * z;      // z = zoom de la vista (pellizco / Shift+rueda)
     const sw = stage.clientWidth, sh = h * s0, W = 1080 * s, H = h * s, ml = Math.max(0, (sw - W) / 2);
     const tx = z > 1 ? Math.min(0, Math.max(parseFloat(piece.dataset.vx) || 0, Math.min(0, sw - W - ml))) : 0;
@@ -1070,8 +947,9 @@ document.getElementById('show-guides').addEventListener('change', e => {
 
 /* Clona la pieza sin transformación de vista previa, sin guías ni controles */
 function cloneForExport(id) {
-  const clone = document.getElementById(id).cloneNode(true);
+  const clone = (typeof id === 'string' ? document.getElementById(id) : id).cloneNode(true);
   clone.removeAttribute('id');
+  ['position', 'left', 'top', 'visibility'].forEach(k => clone.style.removeProperty(k));
   clone.style.transform = 'none';
   clone.style.marginLeft = '0';
   clone.style.removeProperty('--inv');
@@ -1160,7 +1038,7 @@ function pageCss() {
 }
 
 async function buildSvg(id) {
-  const { w, h } = FORMATS[id];
+  const { w, h } = fmtOf(id);
   const clone = cloneForExport(id);
   const fonts = await embeddedFontCss(clone.textContent);
   const markup = new XMLSerializer().serializeToString(clone);
@@ -1172,8 +1050,8 @@ async function buildSvg(id) {
     `</div></foreignObject></svg>`;
 }
 
-async function renderViaSvg(id, scale) {
-  const { w, h } = FORMATS[id];
+async function renderViaSvg(id, scale, q = 0.95) {
+  const { w, h } = fmtOf(id);
   const paper = getComputedStyle(document.documentElement).getPropertyValue('--paper').trim() || '#f7f5f0';
   const svg = await buildSvg(id);
   // Importante: data URL y no blob URL. Con un blob URL el navegador marca el canvas como "contaminado"
@@ -1193,8 +1071,8 @@ async function renderViaSvg(id, scale) {
     });
     try { await img.decode(); } catch (_) { /* no crítico */ }
     const cv = document.createElement('canvas');
-    cv.width = w * scale;
-    cv.height = h * scale;
+    cv.width = Math.round(w * scale);
+    cv.height = Math.round(h * scale);
     const ctx = cv.getContext('2d');
     const paint = () => {
       ctx.fillStyle = paper;
@@ -1215,15 +1093,15 @@ async function renderViaSvg(id, scale) {
       if (d[i] !== d[0] || d[i + 1] !== d[1] || d[i + 2] !== d[2]) { varied = true; break; }
     }
     if (!varied) throw new Error('La imagen salió vacía');
-    const blob = await new Promise(r => cv.toBlob(r, 'image/jpeg', 0.95));
+    const blob = await new Promise(r => cv.toBlob(r, 'image/jpeg', q));
     if (!blob) throw new Error('No se pudo codificar el JPG');
     return blob;
   }
 }
 
-async function renderViaHtml2Canvas(id, scale) {
+async function renderViaHtml2Canvas(id, scale, q = 0.95) {
   if (typeof html2canvas === 'undefined') throw new Error('html2canvas no está disponible');
-  const { w, h } = FORMATS[id];
+  const { w, h } = fmtOf(id);
   const paper = getComputedStyle(document.documentElement).getPropertyValue('--paper').trim() || '#f7f5f0';
   const host = document.getElementById('export-host');
   const clone = cloneForExport(id);
@@ -1234,7 +1112,7 @@ async function renderViaHtml2Canvas(id, scale) {
       scale, width: w, height: h, windowWidth: w, windowHeight: h,
       backgroundColor: paper, useCORS: true, logging: false
     });
-    return await new Promise(r => canvas.toBlob(r, 'image/jpeg', 0.95));
+    return await new Promise(r => canvas.toBlob(r, 'image/jpeg', q));
   } finally {
     clone.remove();
     host.classList.remove('on');
@@ -1242,7 +1120,7 @@ async function renderViaHtml2Canvas(id, scale) {
 }
 
 async function exportJPG(id) {
-  const scale = document.getElementById('hi-res').checked ? 2 : 1;
+  const scale = expScale('jpg');
   setBusy(true);
   try {
     await document.fonts.ready;
@@ -1283,6 +1161,81 @@ async function exportSVG(id) {
     setBusy(false);
   }
 }
+
+function fmtOf(id) {
+  return typeof id === 'string' ? FORMATS[id] : { w: 1080, h: RATIO_H[document.querySelector('.card').dataset.fmt] };
+}
+
+/* Página fuera de pantalla (a partir de su instantánea) lista para exportar */
+function pageExportEl(pg) {
+  const live = pg === CURPG, snap = live ? snapOf(document.querySelector('.piece')) : pg.stack[pg.idx];
+  const el = document.createElement('div');
+  el.className = 'piece p-' + document.querySelector('.card').dataset.fmt;
+  el.style.cssText = 'position:fixed;left:-20000px;top:0;visibility:hidden';
+  el.innerHTML = snap.html;
+  el.style.background = snap.bg;
+  el.querySelectorAll('.ph-img[data-src-id]').forEach(n => { const u = IMGS[n.dataset.srcId]; if (u) n.style.backgroundImage = 'url("' + u + '")'; });
+  document.body.appendChild(el);
+  return el;
+}
+
+async function renderJpgBlob(src, scale, q) {
+  try { return await renderViaSvg(src, scale, q); }
+  catch (err) { console.warn('Exportación nativa no disponible, se usa el método alternativo:', err); return await renderViaHtml2Canvas(src, scale, q); }
+}
+
+/* ZIP sin compresión (los JPG ya están comprimidos): CRC-32 + cabeceras locales y directorio central */
+const CRC_T = (() => { const t = new Uint32Array(256); for (let n = 0; n < 256; n++) { let c = n; for (let k = 0; k < 8; k++) c = c & 1 ? 0xEDB88320 ^ (c >>> 1) : c >>> 1; t[n] = c >>> 0; } return t; })();
+const crc32 = u8 => { let c = 0xFFFFFFFF; for (let i = 0; i < u8.length; i++) c = CRC_T[(c ^ u8[i]) & 255] ^ (c >>> 8); return (c ^ 0xFFFFFFFF) >>> 0; };
+async function makeZip(files) {
+  const enc = new TextEncoder(), parts = [], cd = [];
+  let off = 0, cdSize = 0;
+  const dt = new Date(), time = (dt.getHours() << 11) | (dt.getMinutes() << 5) | (dt.getSeconds() >> 1);
+  const date = ((dt.getFullYear() - 1980) << 9) | ((dt.getMonth() + 1) << 5) | dt.getDate();
+  for (const f of files) {
+    const data = new Uint8Array(await f.blob.arrayBuffer()), name = enc.encode(f.name), crc = crc32(data);
+    const lh = new DataView(new ArrayBuffer(30));
+    lh.setUint32(0, 0x04034b50, true); lh.setUint16(4, 20, true); lh.setUint16(6, 0x0800, true);
+    lh.setUint16(10, time, true); lh.setUint16(12, date, true); lh.setUint32(14, crc, true);
+    lh.setUint32(18, data.length, true); lh.setUint32(22, data.length, true); lh.setUint16(26, name.length, true);
+    parts.push(lh.buffer, name, data);
+    const ch = new DataView(new ArrayBuffer(46));
+    ch.setUint32(0, 0x02014b50, true); ch.setUint16(4, 20, true); ch.setUint16(6, 20, true); ch.setUint16(8, 0x0800, true);
+    ch.setUint16(12, time, true); ch.setUint16(14, date, true); ch.setUint32(16, crc, true);
+    ch.setUint32(20, data.length, true); ch.setUint32(24, data.length, true); ch.setUint16(28, name.length, true); ch.setUint32(42, off, true);
+    cd.push(ch.buffer, name);
+    cdSize += 46 + name.length;
+    off += 30 + name.length + data.length;
+  }
+  const end = new DataView(new ArrayBuffer(22));
+  end.setUint32(0, 0x06054b50, true); end.setUint16(8, files.length, true); end.setUint16(10, files.length, true);
+  end.setUint32(12, cdSize, true); end.setUint32(16, off, true);
+  return new Blob([...parts, ...cd, end.buffer], { type: 'application/zip' });
+}
+
+async function exportAll(kind) {
+  flushAll();
+  const scale = expScale('jpg');
+  const fmt = document.querySelector('.card').dataset.fmt, base = slug(PROJECT.name), pad = n => String(n).padStart(2, '0');
+  setBusy(true);
+  try {
+    await document.fonts.ready;
+    const files = [];
+    for (let i = 0; i < PAGES.length; i++) {
+      const el = pageExportEl(PAGES[i]), nm = base + '-' + pad(i + 1) + '-' + fmt;
+      try {
+        if (kind === 'svg') files.push({ name: nm + '.svg', blob: new Blob([await buildSvg(el)], { type: 'image/svg+xml;charset=utf-8' }) });
+        else files.push({ name: nm + (scale === 2 ? '@2x' : '') + '.jpg', blob: await renderJpgBlob(el, scale) });
+      } finally { el.remove(); }
+    }
+    download(await makeZip(files), base + '-' + fmt + '-' + kind + '.zip');
+  } catch (err) {
+    alert('No se pudo generar el ZIP: ' + err.message);
+  } finally {
+    setBusy(false);
+  }
+}
+document.querySelectorAll('[data-dl-all]').forEach(b => b.addEventListener('click', () => exportAll(b.dataset.dlAll)));
 
 document.querySelectorAll('[data-jpg]').forEach(btn =>
   btn.addEventListener('click', () => exportJPG(btn.dataset.jpg)));
@@ -2566,15 +2519,98 @@ function updateSheet() {
 }
 
 /* Cambio de formato (móvil muestra una pieza a la vez) */
-function setCurrent(fmt) {
-  document.querySelectorAll('.card').forEach(c => {
-    c.classList.toggle('current', c.dataset.fmt === fmt);
-    c.dataset.sheet = '0';
-    c.dataset.open = '0';
+const RATIO_H = { '4x5': 1350, '3x4': 1440, '1x1': 1080, '9x16': 1920 };
+const RATIO_BY_H = { 1350: '4x5', 1440: '3x4', 1080: '1x1', 1920: '9x16' };
+const PAGES = [];                 // páginas: { uid, stack, idx }; la actual usa el historial vivo (HIST)
+let CURPG = null, pageSeq = 1;
+const RATIO_META = { '4x5': ['Feed Portrait', '4:5 · 1080 × 1350 px · Post clásico'], '3x4': ['Feed Tall', '3:4 · 1080 × 1440 px · Máximo espacio feed'],
+                     '1x1': ['Feed Square', '1:1 · 1080 × 1080 px · Cuadrado'], '9x16': ['Stories / Reels', '9:16 · 1080 × 1920 px · Zona segura central'] };
+const RATIO_GUIDE = { '4x5': 'left:80px;top:80px;right:80px;bottom:80px', '3x4': 'left:80px;top:80px;right:80px;bottom:80px',
+                      '1x1': 'left:64px;top:64px;right:64px;bottom:64px', '9x16': 'left:80px;top:250px;right:80px;bottom:340px' };
+const ratioOf = piece => piece.id.replace('post-', '');
+
+function ratioInner(el, fmt) {
+  el.querySelectorAll('.photo-ph span').forEach(sp => { if (/^Foto \d+:\d+$/.test(sp.textContent)) sp.textContent = 'Foto ' + fmt.replace('x', ':'); });
+  const g = el.querySelector('.guide');
+  if (g) g.style.cssText = RATIO_GUIDE[fmt];
+}
+
+/* Solo cambia el DOM de la proporción (clase, id, textos, guía); no mueve elementos. También lo usa Deshacer/Rehacer. */
+function applyRatioDom(piece, fmt) {
+  const card = piece.closest('.card');
+  Object.keys(RATIO_H).forEach(k => piece.classList.remove('p-' + k));
+  piece.classList.add('p-' + fmt);
+  piece.id = 'post-' + fmt;
+  card.dataset.fmt = fmt;
+  card.querySelectorAll('[data-jpg]').forEach(b => { b.dataset.jpg = piece.id; });
+  card.querySelectorAll('[data-svg]').forEach(b => { b.dataset.svg = piece.id; });
+  const m = RATIO_META[fmt], tag = card.querySelector('.card-meta .tag'), txt = card.querySelector('.meta-txt');
+  if (tag) tag.textContent = m[0];
+  if (txt) txt.textContent = m[1];
+  ratioInner(piece, fmt);
+  document.querySelectorAll('.fmt-bar button, .ratio-list button[data-rt]').forEach(b => {
+    const on = (b.dataset.fmt || b.dataset.rt) === fmt;
+    b.classList.toggle('on', on);
+    b.setAttribute('aria-selected', on);
   });
-  document.querySelectorAll('.fmt-bar button').forEach(b => b.classList.toggle('on', b.dataset.fmt === fmt));
+}
+
+/* Elementos absolutos: los de la mitad inferior conservan su distancia al borde inferior; los de arriba no se mueven.
+   El ancla se recuerda (mientras el elemento no se toque) para que volver a la proporción anterior los deje donde estaban. */
+function shiftForHeight(piece, H, d) {
+  piece.querySelectorAll('.drag').forEach(el => {
+    if (el.parentElement !== piece || el.style.position !== 'absolute') return;
+    const top = parseFloat(el.style.top);
+    if (!Number.isFinite(top)) return;
+    const c = top + numOr(el.dataset.dy) + el.offsetHeight / 2, st = el.dataset.anc;
+    const anc = st && Math.abs(parseFloat(st.slice(2)) - top) < 0.6 ? st[0] : (c > H / 2 ? 'b' : 't');
+    const nt = Math.round((anc === 'b' ? top + d : top) * 100) / 100;
+    el.style.top = nt + 'px';
+    el.dataset.anc = anc + ':' + nt;
+  });
+}
+
+function setRatio(fmt, o = {}) {
+  const piece = document.querySelector('.piece'), cur = ratioOf(piece);
+  if (!RATIO_H[fmt] || fmt === cur) return;
   select(null);
+  if (o.shift !== false) {
+    const d = RATIO_H[fmt] - RATIO_H[cur];
+    shiftForHeight(piece, RATIO_H[cur], d);
+    PAGES.forEach(pg => {                                   // el resto de páginas se reubica igual (fuera de pantalla)
+      if (pg === CURPG || !pg.stack) return;
+      const snap = pg.stack[pg.idx], host = document.createElement('div');
+      host.className = 'piece p-' + cur;
+      host.style.cssText = 'position:fixed;left:-20000px;top:0;visibility:hidden';
+      host.innerHTML = snap.html;
+      document.body.appendChild(host);
+      shiftForHeight(host, RATIO_H[cur], d);
+      ratioInner(host, fmt);
+      pg.stack = [{ html: host.innerHTML, bg: snap.bg, ratio: fmt }];
+      pg.idx = 0;
+      host.remove();
+    });
+  }
+  applyRatioDom(piece, fmt);
+  const h = HIST.get(piece);
+  if (h) {                                                  // cambiar de proporción reinicia el historial de deshacer
+    clearTimeout(h.timer); h.timer = null; h.obs.takeRecords();
+    h.stack = [snapOf(piece)]; h.idx = 0;
+    if (CURPG) { CURPG.stack = h.stack; CURPG.idx = 0; }
+  }
   fitPreviews();
+  refreshAll();
+  if (typeof updateHistUI === 'function') updateHistUI();
+  if (typeof renderPages === 'function') renderPages();
+}
+
+function setCurrent(fmt) {
+  const c = document.querySelector('.card');
+  c.classList.add('current');
+  c.dataset.sheet = '0';
+  c.dataset.open = '0';
+  if (fmt && fmt !== c.dataset.fmt) setRatio(fmt);
+  else { select(null); fitPreviews(); }
 }
 
 /* Aviso con acción (por ejemplo, Deshacer) */
@@ -2801,7 +2837,7 @@ const PROJECT_SCHEMA = /*SCHEMA_START*/{
     "pieces": {
       "type": "array",
       "minItems": 1,
-      "maxItems": 4,
+      "maxItems": 40,
       "items": {
         "$ref": "#/$defs/piece"
       }
@@ -3435,12 +3471,8 @@ const PROJECT_SCHEMA = /*SCHEMA_START*/{
       ],
       "properties": {
         "id": {
-          "enum": [
-            "4x5",
-            "3x4",
-            "1x1",
-            "9x16"
-          ]
+          "type": "string",
+          "pattern": "^[A-Za-z0-9_-]{1,20}$"
         },
         "format": {
           "enum": [
@@ -3884,13 +3916,25 @@ function serializeElement(el, used) {
 
 function serializeProject() {
   const used = new Set();
-  const pieces = [...document.querySelectorAll('.card')].map(card => {
-    const piece = card.querySelector('.piece'), fmt = card.dataset.fmt;
+  const fmt = document.querySelector('.card').dataset.fmt;
+  const pieces = PAGES.map(pg => {
+    let piece = document.querySelector('.piece'), host = null;
+    if (pg !== CURPG) {                                     // página fuera de pantalla: se lee desde su instantánea
+      const snap = pg.stack[pg.idx];
+      host = piece = document.createElement('div');
+      host.className = 'piece p-' + fmt;
+      host.style.cssText = 'position:fixed;left:-20000px;top:0;visibility:hidden';
+      host.innerHTML = snap.html;
+      host.style.background = snap.bg;
+      document.body.appendChild(host);
+    }
     const elements = [...piece.querySelectorAll('.drag')]
       .map(el => serializeElement(el, used))
       .filter(Boolean)
       .sort((a, b) => a.z - b.z);
-    return { id: fmt, format: FORMAT_INFO[fmt], width: 1080, height: FORMATS['post-' + fmt].h, background: piece.style.background || null, elements };
+    const out = { id: pg.uid, format: FORMAT_INFO[fmt], width: 1080, height: RATIO_H[fmt], background: piece.style.background || null, elements };
+    if (host) host.remove();
+    return out;
   });
   const images = {};
   used.forEach(id => {
@@ -3919,6 +3963,7 @@ function resetPiece(piece) {
   piece.innerHTML = TEMPLATE_HTML[piece.id.replace('post-', '')];
   piece.style.background = '';
   delete piece.dataset.addN;
+  applyRatioDom(piece, ratioOf(piece));
   initDraggableIn(piece);
 }
 
@@ -4032,11 +4077,18 @@ function applyProject(p) {
   renderAllLibs();
   document.getElementById('snap-on').checked = !!p.settings.snapEnabled;
   document.getElementById('hi-res').checked = p.settings.exportScale === 2;
-  const byId = new Map(p.pieces.map(x => [x.id, x]));
-  document.querySelectorAll('.piece').forEach(piece => {
-    const pj = byId.get(piece.id.replace('post-', ''));
-    if (pj) applyPiece(piece, pj); else resetPiece(piece);
-  });
+  const legacy = new Set(p.pieces.map(x => x.height)).size > 1;       // formato antiguo: una pieza por proporción
+  const list = legacy ? [p.pieces.find(x => x.id === '4x5') || p.pieces[0]] : p.pieces;
+  const piece0 = document.querySelector('.piece');
+  PAGES.length = 0;
+  setRatio(RATIO_BY_H[list[0].height], { shift: false });
+  for (let k = list.length - 1; k >= 0; k--) {                         // la primera página queda visible
+    applyPiece(piece0, list[k]);
+    PAGES.unshift({ uid: list[k].id, stack: [snapOf(piece0)], idx: 0 });
+  }
+  CURPG = PAGES[0];
+  pageSeq = Math.max(pageSeq, ...list.map(x => +((/^pg(\d+)$/.exec(x.id) || [0, 0])[1])));
+  if (legacy) toast('Este proyecto tenía ' + p.pieces.length + ' piezas: se cargó la 4:5.');
   p.pieces.forEach(pc => pc.elements.forEach(e => {
     const m = /^u(\d+)$/.exec(e.id);
     if (m) uidSeq = Math.max(uidSeq, +m[1]);
@@ -4259,6 +4311,7 @@ function newProject() {
   saveNow(true, false);
   select(null);
   if (textEl) closeTextBar();
+  PAGES.length = 0; CURPG = null; pageSeq = 1;
   document.querySelectorAll('.piece').forEach(resetPiece);
   LIBRARY.length = BUILTIN_LIB;
   renderAllLibs();
@@ -4423,10 +4476,10 @@ function snapOf(piece) {
   c.querySelectorAll('.selected, .editing').forEach(n => n.classList.remove('selected', 'editing'));
   c.querySelectorAll('[contenteditable]').forEach(n => n.removeAttribute('contenteditable'));
   c.querySelectorAll('.ph-img').forEach(n => n.style.removeProperty('background-image'));
-  return { html: c.innerHTML, bg: piece.style.background || '' };
+  return { html: c.innerHTML, bg: piece.style.background || '', ratio: ratioOf(piece) };
 }
 
-function sameSnap(a, b) { return a.html === b.html && a.bg === b.bg; }
+function sameSnap(a, b) { return a.html === b.html && a.bg === b.bg && a.ratio === b.ratio; }
 
 function busyInteracting() {
   return !!(dragState || resizeState || panState || gesture || document.body.classList.contains('editing'));
@@ -4464,8 +4517,10 @@ function restore(piece, snap) {
   if (textEl) closeTextBar();
   h.restoring = true;
   const uid = selected && piece.contains(selected) ? selected.dataset.uid : null;
+  if (snap.ratio && ratioOf(piece) !== snap.ratio) applyRatioDom(piece, snap.ratio);
   piece.innerHTML = snap.html;
   piece.style.background = snap.bg;
+  fitPreviews();
   piece.querySelectorAll('.ph-img[data-src-id]').forEach(n => {
     const u = IMGS[n.dataset.srcId];
     if (u) n.style.backgroundImage = `url("${u}")`;
@@ -4634,7 +4689,7 @@ document.getElementById('text-done').addEventListener('click', closeTextBar);
 
 /* Init */
 fillContent();
-document.querySelectorAll('.piece').forEach(p => { TEMPLATE_HTML[p.id.replace('post-', '')] = p.innerHTML; });
+{ const html = document.querySelector('.piece').innerHTML; Object.keys(RATIO_H).forEach(k => { TEMPLATE_HTML[k] = html; }); }
 initDraggable();
 renderAddGrids();
 renderAllLibs();
@@ -5283,6 +5338,334 @@ html body .ff-list button.ff-i.on{background:var(--ui-accent-soft)}
   const _ra = refreshAll;
   refreshAll = function () { const r = _ra.apply(this, arguments); IGFont.sync(); return r; };
   IGFont.sync();
+})();
+</script>
+<style>
+/* ===== Carrusel de páginas ===== */
+.pg-bar{position:fixed;left:0;right:0;bottom:var(--dock-h,0px);z-index:9400;background:var(--ui-surface,#fff);color:var(--ui-text,#111);border-top:1px solid var(--ui-line,#ddd);font-family:'Inter',system-ui,sans-serif}
+.pg-track{display:flex;align-items:center;overflow-x:auto;padding:8px 12px;scrollbar-width:none;touch-action:pan-x;-webkit-overflow-scrolling:touch}
+.pg-track::-webkit-scrollbar{display:none}
+.pg-th{position:relative;flex:0 0 auto;border-radius:8px;cursor:pointer;background:var(--paper,#f7f5f0);user-select:none;-webkit-user-select:none;-webkit-touch-callout:none}
+.pg-clip{position:absolute;inset:0;overflow:hidden;border-radius:8px;pointer-events:none}
+.pg-th::after{content:"";position:absolute;inset:0;border-radius:8px;box-shadow:inset 0 0 0 1px var(--ui-line,#ccc);pointer-events:none}
+.pg-th.on::after{box-shadow:inset 0 0 0 3px var(--ui-accent,#7c5cff)}
+.pg-n{position:absolute;left:4px;bottom:4px;z-index:1;min-width:18px;height:18px;padding:0 5px;border-radius:9px;background:rgba(0,0,0,.65);color:#fff;font:600 .68rem/18px 'Inter',system-ui,sans-serif;text-align:center}
+.pg-th.drag{z-index:5;opacity:.88;box-shadow:0 8px 20px rgba(0,0,0,.35)}
+.pg-th.drop-b::before,.pg-th.drop-a::before{content:"";position:absolute;top:0;bottom:0;width:3px;border-radius:2px;background:var(--ui-accent,#7c5cff);z-index:6}
+.pg-th.drop-b::before{left:-9px}
+.pg-th.drop-a::before{right:-9px}
+.pg-sep{flex:0 0 auto;width:34px;display:flex;justify-content:center}
+.pg-add{width:26px;height:26px;padding:0;border:1px solid var(--ui-line,#ccc);border-radius:50%;background:var(--ui-surface,#fff);color:var(--ui-text,#111);font:600 18px/1 'Inter',system-ui,sans-serif;cursor:pointer}
+.pg-tile{flex:0 0 auto;height:84px;min-width:72px;margin-left:8px;padding:0 12px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;border:0;border-radius:10px;background:var(--ui-raised,#eee);color:var(--ui-text,#111);font:600 .68rem 'Inter',system-ui,sans-serif;cursor:pointer}
+.pg-bar svg{width:22px;height:22px;flex:0 0 auto;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+.pg-menu{position:absolute;right:12px;bottom:calc(100% + 6px);display:flex;flex-direction:column;min-width:210px;padding:6px;border:1px solid var(--ui-line,#ccc);border-radius:12px;background:var(--ui-surface,#fff);box-shadow:0 8px 28px rgba(0,0,0,.3)}
+.pg-menu[hidden]{display:none}
+.pg-menu button{display:flex;align-items:center;gap:12px;min-height:44px;padding:0 14px;border:0;border-radius:8px;background:none;color:inherit;font:600 .88rem 'Inter',system-ui,sans-serif;text-align:left;cursor:pointer}
+.pg-menu button:hover{background:var(--ui-accent-soft,#eee)}
+@media (max-width:900px){
+  body:has(.side.dock-open) .pg-bar,body:has(#cp-sheet.on) .pg-bar{display:none}
+  html body .page{padding-bottom:calc(var(--dock-h,0px) + var(--pg-h,0px) + 12px) !important}
+}
+@media (min-width:901px){
+  .pg-bar{right:var(--sbw,400px);bottom:0}
+  .page,body.has-sheet .page,body.sheet-expanded .page{padding-bottom:calc(var(--pg-h,0px) + 24px)}
+}
+</style>
+<script>
+(function () {
+  const piece = () => document.querySelector('.piece');
+  const ratio = () => document.querySelector('.card').dataset.fmt;
+  const ic = d => '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="' + d + '"/></svg>';
+  const TH = 84;
+  const bar = document.createElement('div');
+  bar.className = 'pg-bar';
+  bar.setAttribute('aria-label', 'Páginas');
+  bar.innerHTML = '<div class="pg-track"></div><div class="pg-menu" hidden>' +
+    '<button type="button" data-a="dup">' + ic('M8 8h11v11H8zM5 15V5h10') + '<span>Duplicar página</span></button>' +
+    '<button type="button" data-a="del">' + ic('M5 7h14M10 7V4h4v3M7 7l1 13h8l1-13') + '<span>Eliminar página</span></button></div>';
+  document.body.appendChild(bar);
+  const track = bar.querySelector('.pg-track'), menu = bar.querySelector('.pg-menu');
+
+  const snapFor = pg => pg === CURPG ? snapOf(piece()) : pg.stack[pg.idx];
+  function fillMini(clip, snap, sc, fmt) {
+    clip.innerHTML = '';
+    const m = document.createElement('div');
+    m.className = 'pg-mini p-' + fmt;
+    m.style.cssText = 'position:absolute;left:0;top:0;transform-origin:0 0;pointer-events:none;transform:scale(' + sc + ')';
+    m.innerHTML = snap.html;
+    m.style.background = snap.bg;
+    m.querySelectorAll('.guide,.rs-box,.snap-layer').forEach(n => n.remove());
+    m.querySelectorAll('[id]').forEach(n => n.removeAttribute('id'));
+    m.querySelectorAll('.ph-img[data-src-id]').forEach(n => { const u = IMGS[n.dataset.srcId]; if (u) n.style.backgroundImage = 'url("' + u + '")'; });
+    clip.appendChild(m);
+  }
+
+  window.renderPages = function (center) {
+    if (!CURPG || !PAGES.length) return;
+    const fmt = ratio(), sc = TH / RATIO_H[fmt], tw = Math.round(1080 * sc), parts = [];
+    PAGES.forEach((pg, i) => {
+      if (i) parts.push('<div class="pg-sep"><button type="button" class="pg-add" data-at="' + i + '" aria-label="Añadir página aquí">+</button></div>');
+      parts.push('<div class="pg-th' + (pg === CURPG ? ' on' : '') + '" data-i="' + i + '" style="width:' + tw + 'px;height:' + TH + 'px" role="button" aria-label="Página ' + (i + 1) + '"><div class="pg-clip"></div><span class="pg-n">' + (i + 1) + '</span></div>');
+    });
+    parts.push('<button type="button" class="pg-tile pg-end">' + ic('M12 5v14M5 12h14') + '<span>Añadir</span></button>');
+    parts.push('<button type="button" class="pg-tile pg-more">' + ic('M5 12h.01M12 12h.01M19 12h.01') + '<span>Página</span></button>');
+    const keep = track.scrollLeft;
+    track.innerHTML = parts.join('');
+    track.querySelectorAll('.pg-th').forEach((th, i) => fillMini(th.querySelector('.pg-clip'), snapFor(PAGES[i]), sc, fmt));
+    const on = track.querySelector('.pg-th.on');
+    track.scrollLeft = center && on ? on.offsetLeft - (track.clientWidth - on.offsetWidth) / 2 : keep;
+    document.documentElement.style.setProperty('--pg-h', bar.offsetHeight + 'px');
+    fitPreviews();
+  };
+
+  /* La miniatura de la página actual se actualiza sola al editar */
+  let rt = null;
+  const thumbSoon = () => {
+    clearTimeout(rt);
+    rt = setTimeout(() => {
+      const clip = track.querySelector('.pg-th.on .pg-clip');
+      if (clip && CURPG) fillMini(clip, snapOf(piece()), TH / RATIO_H[ratio()], ratio());
+    }, 350);
+  };
+  new MutationObserver(thumbSoon).observe(piece(), { subtree: true, childList: true, attributes: true, characterData: true });
+
+  const viewReset = p => { p.dataset.vz = 1; p.dataset.vx = 0; p.dataset.vy = 0; };
+  function stash() { const h = HIST.get(piece()); CURPG.stack = h.stack; CURPG.idx = h.idx; return h; }
+  function show(pg) {
+    const p = piece(), h = HIST.get(p);
+    CURPG = pg; h.stack = pg.stack; h.idx = pg.idx;
+    select(null);
+    restore(p, h.stack[h.idx]);
+    viewReset(p);
+    fitPreviews();
+    renderPages(true);
+  }
+  function gotoPage(pg) {
+    if (pg === CURPG) return;
+    if (textEl) closeTextBar();
+    flushAll();
+    stash();
+    show(pg);
+  }
+  function addPage(at, dup) {
+    const p = piece();
+    if (textEl) closeTextBar();
+    flushAll(); select(null);
+    const h = stash(), pg = { uid: 'pg' + (++pageSeq), stack: null, idx: 0 };
+    PAGES.splice(at, 0, pg);
+    if (dup) { pg.stack = [JSON.parse(JSON.stringify(h.stack[h.idx]))]; show(pg); }
+    else {
+      h.restoring = true; resetPiece(p); h.obs.takeRecords(); h.restoring = false;
+      pg.stack = [snapOf(p)]; CURPG = pg; h.stack = pg.stack; h.idx = 0;
+      viewReset(p); fitPreviews(); updateHistUI(); refreshAll(); renderPages(true);
+    }
+    markDirty();
+  }
+  function delPage() {
+    if (PAGES.length < 2) { toast('Debe quedar al menos una página.'); return; }
+    const i = PAGES.indexOf(CURPG);
+    if (!confirm('¿Eliminar la página ' + (i + 1) + '?')) return;
+    if (textEl) closeTextBar();
+    flushAll();
+    const next = PAGES[i + 1] || PAGES[i - 1];
+    PAGES.splice(i, 1);
+    show(next);
+    markDirty();
+  }
+
+  /* Clics */
+  let noClick = false;
+  track.addEventListener('click', e => {
+    if (noClick) return;
+    const t = e.target.closest('.pg-th, .pg-add, .pg-end, .pg-more');
+    if (!t) return;
+    menu.hidden = true;
+    if (t.classList.contains('pg-th')) gotoPage(PAGES[+t.dataset.i]);
+    else if (t.classList.contains('pg-add')) addPage(+t.dataset.at);
+    else if (t.classList.contains('pg-end')) addPage(PAGES.length);
+    else menu.hidden = !menu.hidden;
+  });
+  menu.addEventListener('click', e => {
+    const b = e.target.closest('button');
+    if (!b) return;
+    menu.hidden = true;
+    if (b.dataset.a === 'dup') addPage(PAGES.indexOf(CURPG) + 1, true);
+    else delPage();
+  });
+  document.addEventListener('pointerdown', e => { if (!menu.hidden && !bar.contains(e.target)) menu.hidden = true; }, true);
+
+  /* Arrastrar una miniatura (mantener pulsada) para cambiar el orden */
+  let pd = null;
+  track.addEventListener('pointerdown', e => {
+    const th = e.target.closest('.pg-th');
+    if (!th) return;
+    const i = +th.dataset.i;
+    pd = { th, i, to: i, x0: e.clientX, id: e.pointerId, on: false, scroll0: track.scrollLeft };
+    pd.timer = setTimeout(() => { pd.on = true; th.classList.add('drag'); try { th.setPointerCapture(pd.id); } catch (_) {} if (navigator.vibrate) navigator.vibrate(12); }, e.pointerType === 'mouse' ? 120 : 320);
+  });
+  track.addEventListener('pointermove', e => {
+    if (!pd) return;
+    if (!pd.on) { if (Math.abs(e.clientX - pd.x0) > 8) { clearTimeout(pd.timer); pd = null; } return; }   // se movió antes: es scroll
+    const r = track.getBoundingClientRect();
+    if (e.clientX < r.left + 40) track.scrollLeft -= 10; else if (e.clientX > r.right - 40) track.scrollLeft += 10;
+    pd.th.style.transform = 'translateX(' + (e.clientX - pd.x0 + track.scrollLeft - pd.scroll0) + 'px)';
+    const ths = [...track.querySelectorAll('.pg-th')];
+    ths.forEach(t => t.classList.remove('drop-b', 'drop-a'));
+    let to = ths.length - 1, mark = null;
+    for (let k = 0; k < ths.length; k++) {
+      if (k === pd.i) continue;
+      const rc = ths[k].getBoundingClientRect();
+      if (e.clientX < rc.left + rc.width / 2) { to = k > pd.i ? k - 1 : k; mark = [ths[k], 'drop-b']; break; }
+    }
+    if (!mark) { const last = ths.filter((_, k) => k !== pd.i).pop(); if (last) mark = [last, 'drop-a']; }
+    if (mark) mark[0].classList.add(mark[1]);
+    pd.to = to;
+  });
+  const endDrag = () => {
+    if (!pd) return;
+    clearTimeout(pd.timer);
+    const d = pd; pd = null;
+    if (!d.on) return;
+    noClick = true; setTimeout(() => { noClick = false; }, 80);
+    if (d.to !== d.i) { const [m] = PAGES.splice(d.i, 1); PAGES.splice(d.to, 0, m); markDirty(); }
+    renderPages();
+  };
+  track.addEventListener('pointerup', endDrag);
+  track.addEventListener('pointercancel', endDrag);
+  track.addEventListener('touchmove', e => { if (pd && pd.on) e.preventDefault(); }, { passive: false });
+  track.addEventListener('contextmenu', e => e.preventDefault());
+
+  /* El historial de la página actual sigue a initHistory (carga de proyecto / proyecto nuevo) */
+  function syncPages() {
+    const h = HIST.get(piece());
+    if (!PAGES.length) PAGES.push({ uid: 'pg1', stack: null, idx: 0 });
+    if (!CURPG || !PAGES.includes(CURPG)) CURPG = PAGES[0];
+    if (h) {
+      if (CURPG.stack) { h.stack = CURPG.stack; h.idx = CURPG.idx || 0; }
+      else { CURPG.stack = h.stack; CURPG.idx = h.idx; }
+    }
+  }
+  const _ih = initHistory;
+  initHistory = function () { _ih(); syncPages(); renderPages(true); };
+  syncPages();
+  renderPages(true);
+  window.addEventListener('resize', () => renderPages());
+})();
+</script>
+<style>
+/* ===== Panel de exportación ===== */
+.ex-field{display:flex;flex-direction:column;gap:6px;margin-bottom:12px}
+.ex-field>label,.ex-l{font-size:.78rem;font-weight:650;color:var(--ui-text,#111)}
+.ex-field select{width:100%;height:44px;padding:0 12px;border:1px solid var(--ui-line,#ccc);border-radius:10px;background:transparent;color:var(--ui-text,#111);font:inherit;font-size:16px}
+.ex-seg{display:flex;width:100%}
+.ex-seg button{flex:1}
+.ex-sum{margin:0 0 12px;font-size:.8rem;color:var(--ui-text,#111);opacity:.75}
+#ex-go{width:100%;min-height:48px}
+.ex-field[hidden],label.toggle[hidden]{display:none}
+</style>
+<script>
+/* PDF: una imagen JPEG por página (a hasta 3x) a tamaño real de 96 ppp; sin librerías. */
+async function makePdf(pages, title) {
+  const enc = new TextEncoder(), chunks = [], xref = [];
+  let off = 0;
+  const push = d => { const u = typeof d === 'string' ? enc.encode(d) : d; chunks.push(u); off += u.length; };
+  const obj = (n, body) => { xref[n] = off; push(n + ' 0 obj\n' + body + '\nendobj\n'); };
+  push('%PDF-1.4\n%\u00e2\u00e3\u00cf\u00d3\n');
+  obj(1, '<< /Type /Catalog /Pages 2 0 R >>');
+  obj(2, '<< /Type /Pages /Kids [' + pages.map((_, i) => (3 + 3 * i) + ' 0 R').join(' ') + '] /Count ' + pages.length + ' >>');
+  for (let i = 0; i < pages.length; i++) {
+    const p = pages[i], jpg = new Uint8Array(await p.blob.arrayBuffer());
+    const pw = (p.w * 0.75).toFixed(2), ph = (p.h * 0.75).toFixed(2), cs = 'q ' + pw + ' 0 0 ' + ph + ' 0 0 cm /Im0 Do Q';
+    obj(3 + 3 * i, '<< /Type /Page /Parent 2 0 R /MediaBox [0 0 ' + pw + ' ' + ph + '] /Resources << /XObject << /Im0 ' + (5 + 3 * i) + ' 0 R >> >> /Contents ' + (4 + 3 * i) + ' 0 R >>');
+    obj(4 + 3 * i, '<< /Length ' + cs.length + ' >>\nstream\n' + cs + '\nendstream');
+    xref[5 + 3 * i] = off;
+    push((5 + 3 * i) + ' 0 obj\n<< /Type /XObject /Subtype /Image /Width ' + p.pxw + ' /Height ' + p.pxh + ' /ColorSpace /DeviceRGB /BitsPerComponent 8 /Filter /DCTDecode /Length ' + jpg.length + ' >>\nstream\n');
+    push(jpg);
+    push('\nendstream\nendobj\n');
+  }
+  const n = 3 + 3 * pages.length;
+  obj(n, '<< /Title <FEFF' + [...(title || 'Documento')].map(c => c.charCodeAt(0).toString(16).padStart(4, '0')).join('') + '> /Producer (Editor de posts) >>');
+  const xo = off;
+  push('xref\n0 ' + (n + 1) + '\n0000000000 65535 f \n' + xref.slice(1).map(o => String(o).padStart(10, '0') + ' 00000 n \n').join(''));
+  push('trailer\n<< /Size ' + (n + 1) + ' /Root 1 0 R /Info ' + n + ' 0 R >>\nstartxref\n' + xo + '\n%%EOF');
+  return new Blob(chunks, { type: 'application/pdf' });
+}
+
+(function () {
+  const KEY = 'ig.export.v1';
+  const LV = { estandar: 1, alta: 2, maxima: 3 }, JQ = { estandar: 0.92, alta: 0.95, maxima: 0.98 };
+  const E = { type: 'jpg', q: { jpg: 'estandar', pdf: 'maxima' }, pages: 'all', split: false };
+  try { const o = JSON.parse(localStorage.getItem(KEY) || 'null'); if (o) { E.type = o.type || E.type; E.q = Object.assign(E.q, o.q); E.pages = o.pages || E.pages; E.split = !!o.split; } } catch (_) {}
+  const save = () => { try { localStorage.setItem(KEY, JSON.stringify(E)); } catch (_) {} };
+  const $ = id => document.getElementById(id);
+  const fmtNow = () => document.querySelector('.card').dataset.fmt;
+
+  /* Escala según calidad; limitada al área máxima de canvas de los móviles (~16,7 Mpx) */
+  window.expScale = function (type) {
+    if (type === 'svg') return 1;
+    const cap = Math.sqrt(16.7e6 / (1080 * RATIO_H[fmtNow()]));
+    return Math.max(1, Math.min(LV[E.q[type]] || 1, cap));
+  };
+
+  function sync() {
+    const n = PAGES.length, multi = n > 1, t = E.type;
+    if (!multi) E.pages = 'all';
+    $('ex-type').value = t;
+    document.querySelector('[data-ex="q"]').hidden = t === 'svg';
+    document.querySelector('[data-ex="p"]').hidden = !multi;
+    document.querySelector('[data-ex="split"]').hidden = !(t === 'pdf' && multi && E.pages === 'all');
+    $('ex-split').checked = E.split;
+    $('ex-n').textContent = n;
+    $('hi-res').checked = E.q.jpg !== 'estandar';
+    document.querySelectorAll('#ex-q button').forEach(b => b.classList.toggle('on', b.dataset.v === E.q[t]));
+    document.querySelectorAll('#ex-p button').forEach(b => b.classList.toggle('on', b.dataset.v === E.pages));
+    const cnt = E.pages === 'one' ? 1 : n, sc = expScale(t), h = RATIO_H[fmtNow()];
+    const size = t === 'svg' ? '1080 × ' + h + ' px' : Math.round(1080 * sc) + ' × ' + Math.round(h * sc) + ' px';
+    const zip = cnt > 1 && (t !== 'pdf' || E.split);
+    $('ex-sum').textContent = (cnt > 1 ? cnt + ' páginas' : '1 página') + ' · ' + size + ' · ' + (t === 'pdf' ? (zip ? 'ZIP de PDF' : 'un solo PDF') : zip ? 'ZIP' : t.toUpperCase());
+  }
+  $('ex-type').addEventListener('change', e => { E.type = e.target.value; save(); sync(); });
+  $('ex-q').addEventListener('click', e => { const b = e.target.closest('button'); if (b) { E.q[E.type] = b.dataset.v; save(); sync(); } });
+  $('ex-p').addEventListener('click', e => { const b = e.target.closest('button'); if (b) { E.pages = b.dataset.v; save(); sync(); } });
+  $('ex-split').addEventListener('change', e => { E.split = e.target.checked; save(); sync(); });
+  const _rp = window.renderPages;
+  window.renderPages = function (c) { _rp(c); sync(); };
+
+  async function run() {
+    flushAll();
+    const t = E.type, fmt = fmtNow(), h = RATIO_H[fmt], sc = expScale(t), q = JQ[E.q[t]] || 0.95;
+    const base = slug(PROJECT.name), pad = n => String(n).padStart(2, '0'), list = E.pages === 'one' ? [CURPG] : PAGES.slice();
+    const suffix = t === 'jpg' && sc !== 1 ? '@' + (+sc.toFixed(1)) + 'x' : '';
+    setBusy(true);
+    try {
+      await document.fonts.ready;
+      const items = [];
+      for (const pg of list) {
+        const nm = base + '-' + pad(PAGES.indexOf(pg) + 1) + '-' + fmt, el = pageExportEl(pg);
+        try {
+          if (t === 'svg') items.push({ name: nm + '.svg', blob: new Blob([await buildSvg(el)], { type: 'image/svg+xml;charset=utf-8' }) });
+          else items.push({ name: nm + suffix + (t === 'pdf' ? '.pdf' : '.jpg'), blob: await renderJpgBlob(el, sc, q) });
+        } finally { el.remove(); }
+      }
+      const px = { pxw: Math.round(1080 * sc), pxh: Math.round(h * sc), w: 1080, h };
+      let out;                                                   // [{name, blob}] finales
+      if (t === 'pdf') {
+        if (E.split || items.length === 1) {
+          out = [];
+          for (const it of items) out.push({ name: it.name, blob: await makePdf([{ blob: it.blob, ...px }], PROJECT.name) });
+        } else out = [{ name: base + '-' + fmt + '.pdf', blob: await makePdf(items.map(it => ({ blob: it.blob, ...px })), PROJECT.name) }];
+      } else out = items;
+      if (out.length === 1) {
+        if (t === 'jpg' && isTouch()) showResult(out[0].blob, out[0].name, null); else download(out[0].blob, out[0].name);
+      } else download(await makeZip(out), base + '-' + fmt + '-' + t + '.zip');
+    } catch (err) {
+      alert('No se pudo exportar: ' + err.message);
+    } finally {
+      setBusy(false);
+    }
+  }
+  $('ex-go').addEventListener('click', run);
+  sync();
 })();
 </script>
 </body>
