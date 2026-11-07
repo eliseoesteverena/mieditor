@@ -745,7 +745,8 @@ window.IGFont = (function () {
       <div class="ex-field" data-ex="q"><span class="ex-l">Calidad</span>
         <div class="subtabs ex-seg" id="ex-q"><button type="button" data-v="estandar">Estándar</button><button type="button" data-v="alta">Alta</button><button type="button" data-v="maxima">Máxima</button></div></div>
       <div class="ex-field" data-ex="p"><span class="ex-l">Páginas</span>
-        <div class="subtabs ex-seg" id="ex-p"><button type="button" data-v="all">Todas (<span id="ex-n">1</span>)</button><button type="button" data-v="one">Esta página</button></div></div>
+        <div class="subtabs ex-seg" id="ex-p"><button type="button" data-v="all">Todas (<span id="ex-n">1</span>)</button><button type="button" data-v="one">Esta página</button><button type="button" data-v="range">Rango</button></div></div>
+      <div class="ex-field" data-ex="range" hidden><input id="ex-range" type="text" inputmode="numeric" placeholder="Ej.: 1-3, 5" autocomplete="off" spellcheck="false" aria-label="Rango de páginas"></div>
       <label class="toggle" data-ex="split"><input type="checkbox" id="ex-split"> Páginas como archivos separados</label>
       <p class="ex-sum" id="ex-sum"></p>
       <button type="button" class="btn btn-mustard" id="ex-go">Descargar</button>
@@ -5405,10 +5406,9 @@ html body .ff-list button.ff-i.on{background:var(--ui-accent-soft)}
     const fmt = ratio(), sc = TH / RATIO_H[fmt], tw = Math.round(1080 * sc), parts = [];
     PAGES.forEach((pg, i) => {
       if (i) parts.push('<div class="pg-sep"><button type="button" class="pg-add" data-at="' + i + '" aria-label="Añadir página aquí">+</button></div>');
-      parts.push('<div class="pg-th' + (pg === CURPG ? ' on' : '') + '" data-i="' + i + '" style="width:' + tw + 'px;height:' + TH + 'px" role="button" aria-label="Página ' + (i + 1) + '"><div class="pg-clip"></div><span class="pg-n">' + (i + 1) + '</span></div>');
+      parts.push('<div class="pg-th' + (pg === CURPG ? ' on' : '') + '" data-i="' + i + '" style="width:' + tw + 'px;height:' + TH + 'px" role="button" aria-label="Página ' + (i + 1) + '"><div class="pg-clip"></div><span class="pg-n">' + (i + 1) + '</span><button type="button" class="pg-dots" aria-label="Opciones de la página ' + (i + 1) + '" aria-haspopup="menu"><span>' + ic('M5 12h.01M12 12h.01M19 12h.01') + '</span></button></div>');
     });
     parts.push('<button type="button" class="pg-tile pg-end">' + ic('M12 5v14M5 12h14') + '<span>Añadir</span></button>');
-    parts.push('<button type="button" class="pg-tile pg-more">' + ic('M5 12h.01M12 12h.01M19 12h.01') + '<span>Página</span></button>');
     const keep = track.scrollLeft;
     track.innerHTML = parts.join('');
     track.querySelectorAll('.pg-th').forEach((th, i) => fillMini(th.querySelector('.pg-clip'), snapFor(PAGES[i]), sc, fmt));
@@ -5473,17 +5473,33 @@ html body .ff-list button.ff-i.on{background:var(--ui-accent-soft)}
     markDirty();
   }
 
+  /* Menú de la página (junto a su miniatura) */
+  function openMenu(th) {
+    const br = bar.getBoundingClientRect(), r = th.getBoundingClientRect();
+    menu.hidden = false;
+    menu.dataset.i = th.dataset.i;
+    menu.style.right = 'auto';
+    menu.style.left = Math.max(8, Math.min(r.left - br.left, window.innerWidth - menu.offsetWidth - 8)) + 'px';
+  }
+
   /* Clics */
   let noClick = false;
   track.addEventListener('click', e => {
     if (noClick) return;
-    const t = e.target.closest('.pg-th, .pg-add, .pg-end, .pg-more');
+    const dots = e.target.closest('.pg-dots');
+    if (dots) {
+      const i = dots.closest('.pg-th').dataset.i;
+      if (!menu.hidden && menu.dataset.i === i) { menu.hidden = true; return; }
+      gotoPage(PAGES[+i]);
+      openMenu(track.querySelector('.pg-th.on'));
+      return;
+    }
+    const t = e.target.closest('.pg-th, .pg-add, .pg-end');
     if (!t) return;
     menu.hidden = true;
     if (t.classList.contains('pg-th')) gotoPage(PAGES[+t.dataset.i]);
     else if (t.classList.contains('pg-add')) addPage(+t.dataset.at);
-    else if (t.classList.contains('pg-end')) addPage(PAGES.length);
-    else menu.hidden = !menu.hidden;
+    else addPage(PAGES.length);
   });
   menu.addEventListener('click', e => {
     const b = e.target.closest('button');
@@ -5498,7 +5514,7 @@ html body .ff-list button.ff-i.on{background:var(--ui-accent-soft)}
   let pd = null;
   track.addEventListener('pointerdown', e => {
     const th = e.target.closest('.pg-th');
-    if (!th) return;
+    if (!th || e.target.closest('.pg-dots')) return;
     const i = +th.dataset.i;
     pd = { th, i, to: i, x0: e.clientX, id: e.pointerId, on: false, scroll0: track.scrollLeft };
     pd.timer = setTimeout(() => { pd.on = true; th.classList.add('drag'); try { th.setPointerCapture(pd.id); } catch (_) {} if (navigator.vibrate) navigator.vibrate(12); }, e.pointerType === 'mouse' ? 120 : 320);
@@ -5594,11 +5610,29 @@ async function makePdf(pages, title) {
 (function () {
   const KEY = 'ig.export.v1';
   const LV = { estandar: 1, alta: 2, maxima: 3 }, JQ = { estandar: 0.92, alta: 0.95, maxima: 0.98 };
-  const E = { type: 'jpg', q: { jpg: 'estandar', pdf: 'maxima' }, pages: 'all', split: false };
-  try { const o = JSON.parse(localStorage.getItem(KEY) || 'null'); if (o) { E.type = o.type || E.type; E.q = Object.assign(E.q, o.q); E.pages = o.pages || E.pages; E.split = !!o.split; } } catch (_) {}
+  const E = { type: 'jpg', q: { jpg: 'estandar', pdf: 'maxima' }, pages: 'all', range: '', split: false };
+  try { const o = JSON.parse(localStorage.getItem(KEY) || 'null'); if (o) { E.type = o.type || E.type; E.q = Object.assign(E.q, o.q); E.pages = o.pages || E.pages; E.range = typeof o.range === 'string' ? o.range : ''; E.split = !!o.split; } } catch (_) {}
   const save = () => { try { localStorage.setItem(KEY, JSON.stringify(E)); } catch (_) {} };
   const $ = id => document.getElementById(id);
   const fmtNow = () => document.querySelector('.card').dataset.fmt;
+  /* "1-3, 5, 7-9" → índices de página (base 0), o null si no es válido */
+  function parseRange(str, n) {
+    const out = new Set();
+    for (const part of str.split(/[,;\s]+/).filter(Boolean)) {
+      const m = /^(\d+)(?:-(\d+))?$/.exec(part);
+      if (!m) return null;
+      let a = +m[1], b = m[2] ? +m[2] : a;
+      if (a > b) [a, b] = [b, a];
+      if (a < 1 || b > n) return null;
+      for (let i = a; i <= b; i++) out.add(i - 1);
+    }
+    return out.size ? [...out].sort((x, y) => x - y) : null;
+  }
+  const pagesSel = () => {
+    if (E.pages === 'one') return [CURPG];
+    if (E.pages === 'range') { const ix = parseRange(E.range, PAGES.length); return ix ? ix.map(i => PAGES[i]) : []; }
+    return PAGES.slice();
+  };
 
   /* Escala según calidad; limitada al área máxima de canvas de los móviles (~16,7 Mpx) */
   window.expScale = function (type) {
@@ -5613,13 +5647,19 @@ async function makePdf(pages, title) {
     $('ex-type').value = t;
     document.querySelector('[data-ex="q"]').hidden = t === 'svg';
     document.querySelector('[data-ex="p"]').hidden = !multi;
-    document.querySelector('[data-ex="split"]').hidden = !(t === 'pdf' && multi && E.pages === 'all');
+    document.querySelector('[data-ex="range"]').hidden = !(multi && E.pages === 'range');
+    const sel = pagesSel(), cnt = sel.length;
+    document.querySelector('[data-ex="split"]').hidden = !(t === 'pdf' && cnt > 1);
+    if (document.activeElement !== $('ex-range')) $('ex-range').value = E.range;
+    $('ex-range').classList.toggle('bad', E.pages === 'range' && !cnt);
+    $('ex-go').disabled = !cnt;
     $('ex-split').checked = E.split;
     $('ex-n').textContent = n;
     $('hi-res').checked = E.q.jpg !== 'estandar';
     document.querySelectorAll('#ex-q button').forEach(b => b.classList.toggle('on', b.dataset.v === E.q[t]));
     document.querySelectorAll('#ex-p button').forEach(b => b.classList.toggle('on', b.dataset.v === E.pages));
-    const cnt = E.pages === 'one' ? 1 : n, sc = expScale(t), h = RATIO_H[fmtNow()];
+    if (!cnt) { $('ex-sum').textContent = 'Escribe un rango válido, por ejemplo 1-3, 5 (el proyecto tiene ' + n + ' páginas).'; return; }
+    const sc = expScale(t), h = RATIO_H[fmtNow()];
     const size = t === 'svg' ? '1080 × ' + h + ' px' : Math.round(1080 * sc) + ' × ' + Math.round(h * sc) + ' px';
     const zip = cnt > 1 && (t !== 'pdf' || E.split);
     $('ex-sum').textContent = (cnt > 1 ? cnt + ' páginas' : '1 página') + ' · ' + size + ' · ' + (t === 'pdf' ? (zip ? 'ZIP de PDF' : 'un solo PDF') : zip ? 'ZIP' : t.toUpperCase());
@@ -5627,14 +5667,16 @@ async function makePdf(pages, title) {
   $('ex-type').addEventListener('change', e => { E.type = e.target.value; save(); sync(); });
   $('ex-q').addEventListener('click', e => { const b = e.target.closest('button'); if (b) { E.q[E.type] = b.dataset.v; save(); sync(); } });
   $('ex-p').addEventListener('click', e => { const b = e.target.closest('button'); if (b) { E.pages = b.dataset.v; save(); sync(); } });
+  $('ex-range').addEventListener('input', e => { E.range = e.target.value; save(); sync(); });
   $('ex-split').addEventListener('change', e => { E.split = e.target.checked; save(); sync(); });
   const _rp = window.renderPages;
   window.renderPages = function (c) { _rp(c); sync(); };
 
   async function run() {
+    if (!pagesSel().length) return;
     flushAll();
     const t = E.type, fmt = fmtNow(), h = RATIO_H[fmt], sc = expScale(t), q = JQ[E.q[t]] || 0.95;
-    const base = slug(PROJECT.name), pad = n => String(n).padStart(2, '0'), list = E.pages === 'one' ? [CURPG] : PAGES.slice();
+    const base = slug(PROJECT.name), pad = n => String(n).padStart(2, '0'), list = pagesSel();
     const suffix = t === 'jpg' && sc !== 1 ? '@' + (+sc.toFixed(1)) + 'x' : '';
     setBusy(true);
     try {
@@ -5668,5 +5710,14 @@ async function makePdf(pages, title) {
   sync();
 })();
 </script>
+<style>
+/* ===== Botón ⋯ de página + rango de exportación ===== */
+.pg-dots{position:absolute;top:0;right:0;z-index:2;display:flex;align-items:flex-start;justify-content:flex-end;width:34px;height:34px;padding:0;border:0;background:none;cursor:pointer}
+.pg-dots>span{display:flex;align-items:center;justify-content:center;width:24px;height:16px;margin:3px;border-radius:8px;background:rgba(0,0,0,.62);color:#fff}
+.pg-dots svg{width:15px;height:15px;stroke-width:3}
+.ex-field input[type=text]{width:100%;box-sizing:border-box;height:44px;padding:0 12px;border:1px solid var(--ui-line,#ccc);border-radius:10px;background:transparent;color:var(--ui-text,#111);font:inherit;font-size:16px}
+.ex-field input.bad{border-color:#e5484d}
+#ex-go:disabled{opacity:.4}
+</style>
 </body>
 </html>
