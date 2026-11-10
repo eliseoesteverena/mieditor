@@ -2911,6 +2911,12 @@ const PROJECT_SCHEMA = /*SCHEMA_START*/{
       "maxLength": 200,
       "pattern": "^(?!.*url\\()[#a-zA-Z0-9(),.%\\s/-]+$"
     },
+    "cssShadow": {
+      "description": "Sombra CSS canónica: \"none\" o \"Xpx Ypx Blurpx color\".",
+      "type": "string",
+      "maxLength": 120,
+      "pattern": "^(none|-?[0-9.]+px -?[0-9.]+px [0-9.]+px (#[0-9a-fA-F]{3,8}|rgba?\\([0-9., %/]+\\)))$"
+    },
     "image": {
       "type": "object",
       "additionalProperties": false,
@@ -3179,6 +3185,33 @@ const PROJECT_SCHEMA = /*SCHEMA_START*/{
             "lowercase",
             "capitalize"
           ]
+        },
+        "borderWidth": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 100,
+          "description": "Grosor del trazo (borde) en px."
+        },
+        "borderColor": {
+          "$ref": "#/$defs/cssColor"
+        },
+        "borderRadius": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1000,
+          "description": "Redondeado de las esquinas en px."
+        },
+        "boxShadow": {
+          "$ref": "#/$defs/cssShadow"
+        },
+        "padding": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 400,
+          "description": "Espaciado interno en px (los 4 lados)."
+        },
+        "textShadow": {
+          "$ref": "#/$defs/cssShadow"
         }
       }
     },
@@ -3188,6 +3221,30 @@ const PROJECT_SCHEMA = /*SCHEMA_START*/{
       "properties": {
         "background": {
           "$ref": "#/$defs/cssColor"
+        },
+        "borderWidth": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 100,
+          "description": "Grosor del trazo (borde) en px."
+        },
+        "borderColor": {
+          "$ref": "#/$defs/cssColor"
+        },
+        "borderRadius": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1000,
+          "description": "Redondeado de las esquinas en px."
+        },
+        "boxShadow": {
+          "$ref": "#/$defs/cssShadow"
+        },
+        "padding": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 400,
+          "description": "Espaciado interno en px (los 4 lados)."
         }
       }
     },
@@ -3205,6 +3262,30 @@ const PROJECT_SCHEMA = /*SCHEMA_START*/{
         },
         "background": {
           "$ref": "#/$defs/cssColor"
+        },
+        "borderWidth": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 100,
+          "description": "Grosor del trazo (borde) en px."
+        },
+        "borderColor": {
+          "$ref": "#/$defs/cssColor"
+        },
+        "borderRadius": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1000,
+          "description": "Redondeado de las esquinas en px."
+        },
+        "boxShadow": {
+          "$ref": "#/$defs/cssShadow"
+        },
+        "padding": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 400,
+          "description": "Espaciado interno en px (los 4 lados)."
         }
       }
     },
@@ -3479,6 +3560,9 @@ const PROJECT_SCHEMA = /*SCHEMA_START*/{
         "html": {
           "type": "string",
           "maxLength": 20000
+        },
+        "style": {
+          "$ref": "#/$defs/boxStyle"
         }
       }
     },
@@ -3786,6 +3870,7 @@ function applyTextStyle(el, st) {
   s.textDecoration = st.textDecoration || '';
   s.textTransform = st.textTransform || '';
   setAlign(el, st.textAlign);
+  applyFx(el, st);
 }
 
 function bgOf(el) {
@@ -3810,7 +3895,47 @@ function readTextStyle(el) {
   const dl = (/underline/.test(s.textDecoration) ? 'underline' : '') + (/line-through/.test(s.textDecoration) ? (/underline/.test(s.textDecoration) ? ' ' : '') + 'line-through' : '');
   if (dl) st.textDecoration = dl;
   if (s.textTransform && s.textTransform !== 'none') st.textTransform = s.textTransform;
+  readFx(el, st, !!el.dataset.f);
   return st;
+}
+
+/* ---------- Efectos de caja: trazo, redondeado, sombra, espaciado interno (y sombra de texto) ----------
+   Se guardan solo los que el usuario cambió (estilo en línea); lo demás sigue siendo el CSS de la marca. */
+function parseShadow(v) {                       // "rgb(0, 0, 0) 3px 3px 6px 0px" → { x, y, b, c } (una sola sombra, sin inset)
+  if (!v || v === 'none' || /inset/.test(v)) return null;
+  const cm = v.match(/rgba?\([^)]*\)|#[0-9a-f]{3,8}\b/gi);
+  if (!cm || cm.length !== 1) return null;
+  const n = v.replace(cm[0], ' ').match(/-?[\d.]+/g) || [];
+  if (n.length < 2) return null;
+  return { x: +n[0], y: +n[1], b: n[2] != null ? +n[2] : 0, c: cm[0] };
+}
+const fmtShadow = o => r2(o.x) + 'px ' + r2(o.y) + 'px ' + r2(Math.max(0, o.b)) + 'px ' + o.c;
+
+function readFx(el, st, withText) {
+  const s = el.style;
+  if (s.borderTopWidth !== '') { const w = parseFloat(s.borderTopWidth); if (Number.isFinite(w)) st.borderWidth = clampNum(r2(w), 0, 100); }
+  if (s.borderTopColor) st.borderColor = s.borderTopColor;
+  if (/px$/.test(s.borderTopLeftRadius)) st.borderRadius = clampNum(r2(parseFloat(s.borderTopLeftRadius)), 0, 1000);
+  if (s.boxShadow === 'none') st.boxShadow = 'none';
+  else { const p = parseShadow(s.boxShadow); if (p) st.boxShadow = fmtShadow(p); }
+  if (/px$/.test(s.paddingTop)) st.padding = clampNum(r2(parseFloat(s.paddingTop)), 0, 400);
+  if (withText) {
+    if (s.textShadow === 'none') st.textShadow = 'none';
+    else { const p = parseShadow(s.textShadow); if (p) st.textShadow = fmtShadow(p); }
+  }
+  return st;
+}
+
+function applyFx(el, st) {
+  st = st || {};
+  const s = el.style;
+  s.borderStyle = st.borderWidth != null ? 'solid' : '';
+  s.borderWidth = st.borderWidth != null ? st.borderWidth + 'px' : '';
+  s.borderColor = st.borderColor || '';
+  s.borderRadius = st.borderRadius != null ? st.borderRadius + 'px' : '';
+  s.boxShadow = st.boxShadow || '';
+  s.padding = st.padding != null ? st.padding + 'px' : '';
+  s.textShadow = st.textShadow || '';
 }
 
 /* ---------- Fotos: imagen, encuadre y ajuste al marco ---------- */
@@ -3937,6 +4062,7 @@ function serializeElement(el, used) {
     const style = {};
     const bg = bgOf(el);
     if (bg) style.background = bg;
+    readFx(el, style, false);
     return { ...common, type: 'photo', image, style };
   }
   if (isSticker) {
@@ -3946,7 +4072,12 @@ function serializeElement(el, used) {
     return { ...common, type: 'sticker', label: lab ? lab.textContent : '', value: val ? val.textContent : '', style: st };
   }
   if (el.classList.contains('deco')) {
-    return { ...common, type: 'decoration', name: el.dataset.name || 'Decorativo', html: el.innerHTML };
+    const dst = {}, dbg = bgOf(el);
+    if (dbg) dst.background = dbg;
+    readFx(el, dst, false);
+    const deco = { ...common, type: 'decoration', name: el.dataset.name || 'Decorativo', html: el.innerHTML };
+    if (Object.keys(dst).length) deco.style = dst;
+    return deco;
   }
   if (el.dataset.f && TEXT_ROLES[el.dataset.f]) {
     return { ...common, type: 'text', role: el.dataset.f, text: el.textContent, style: readTextStyle(el) };
@@ -4052,6 +4183,7 @@ function applyElementData(el, e) {
       delete im.dataset.srcId;
     }
     el.style.background = e.style.background || '';
+    applyFx(el, e.style);
     applyImg(el);
   } else if (e.type === 'sticker') {
     const lab = el.querySelector('[data-f="datoLabel"]'), val = el.querySelector('[data-f="datoValor"]');
@@ -4061,9 +4193,12 @@ function applyElementData(el, e) {
     s.fontSize = st.fontSize != null ? st.fontSize + 'px' : '';
     s.color = st.color || '';
     s.background = st.background || '';
+    applyFx(el, st);
   } else if (e.type === 'decoration') {
     el.dataset.name = e.name;
     el.innerHTML = sanitize(e.html);
+    el.style.background = (e.style && e.style.background) || '';
+    applyFx(el, e.style);
   }
 }
 
@@ -4769,6 +4904,179 @@ fitPreviews();
 })();
 </script>
 <script>
+/* ===== Efectos de caja: Trazo, Sombra y Espaciado interno =====
+   Mismos controles que el resto de propiedades (rango + número, selector de color). Lo guardado vive en el
+   estilo en línea del elemento (ver readFx / applyFx). */
+const FXUI = (function () {
+  const HEX0 = '#141210', SHADOW0 = 'rgba(0, 0, 0, 0.35)';
+  const RESET = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 12a8 8 0 1 0 2.6-5.9"/><path d="M4 4v5h5"/></svg>';
+  const num = (v, d = 0) => { const n = parseFloat(v); return Number.isFinite(n) ? n : d; };
+  const clamp = (v, lo, hi) => Math.min(hi, Math.max(lo, v));
+  const ANG = new WeakMap();                    // el → { box: {a, d}, text: {a, d} } (el ángulo se pierde al redondear x/y)
+  const mk = (tag, cls, html) => { const n = document.createElement(tag); if (cls) n.className = cls; if (html != null) n.innerHTML = html; return n; };
+  const idle = (inp, v) => { if (document.activeElement !== inp) inp.value = v; };
+
+  function ranged(box, label, o) {              // box: contenedor ya creado (.fld o .row)
+    const r = box.querySelector('[type=range]'), n = box.querySelector('[type=number]');
+    r.min = o.min; r.max = o.max; r.step = 1;
+    n.min = o.min; n.max = o.nmax != null ? o.nmax : o.max; n.step = 1;
+    r.setAttribute('aria-label', label); n.setAttribute('aria-label', label);
+    return { r, n, el: box, set(v) { idle(r, v); idle(n, v); } };
+  }
+  const slider = (label, o) => {
+    const f = mk('div', 'fld', '<span></span><div class="row"><input type="range"><input type="number"></div>');
+    f.querySelector('span').textContent = label;
+    return ranged(f, label, o);
+  };
+  const line = (label, o) => {
+    const d = mk('div', 'row fx-line', '<span class="fx-l"></span><input type="range"><input type="number">');
+    d.querySelector('.fx-l').textContent = label;
+    return ranged(d, label, o);
+  };
+  const colorField = (cls, ph) => mk('div', 'fld', '<span>Color</span><div class="row"><input type="color" class="' + cls + '-p" value="#000000"><input type="text" class="' + cls + '-t" placeholder="' + ph + '"></div>');
+  const bindNum = (c, fn) => { const h = e => fn(num(e.target.value)); c.r.addEventListener('input', h); c.n.addEventListener('input', h); };
+  const clearBtn = title => { const b = mk('button', 'btn btn-sm', RESET); b.type = 'button'; b.title = title; b.setAttribute('aria-label', title); return b; };
+
+  function miniTabs(items, foot) {              // pestañas anidadas (mismo estilo que las del panel)
+    const d = mk('div', 'fxtabs'), row = mk('div', 'subtabs-row'), strip = mk('div', 'subtabs');
+    strip.setAttribute('role', 'tablist');
+    row.appendChild(strip);
+    if (foot) { const f = mk('span', 'sub-end'); f.appendChild(foot); row.appendChild(f); }
+    d.appendChild(row);
+    const subs = items.map(([label, nodes]) => {
+      const b = mk('button'); b.type = 'button'; b.textContent = label; b.setAttribute('role', 'tab');
+      const p = mk('div', 'sub'); nodes.forEach(n => p.appendChild(n));
+      strip.appendChild(b); d.appendChild(p);
+      return { b, p };
+    });
+    const pick = i => subs.forEach((x, j) => { x.b.classList.toggle('on', i === j); x.p.classList.toggle('on', i === j); x.b.setAttribute('aria-selected', i === j ? 'true' : 'false'); });
+    subs.forEach((x, i) => x.b.addEventListener('click', () => pick(i)));
+    pick(0);
+    return d;
+  }
+
+  function build(card) {
+    const piece = card.querySelector('.piece');
+    const cur = () => (selected && piece.contains(selected) && !isLocked(selected) ? selected : null);
+    const touch = () => { try { updateBox(); } catch (_) {} };
+
+    /* ---- Trazo ---- */
+    const sw = slider('Grosor (px)', { min: 0, max: 40, nmax: 100 });
+    const sr = slider('Redondeado (px)', { min: 0, max: 200, nmax: 1000 });
+    const sc = colorField('st', '#141210 o rgba(20, 18, 16, 0.5)');
+    const sct = sc.querySelector('[type=text]'), scp = sc.querySelector('[type=color]');
+    bindNum(sw, v => {
+      const el = cur(); if (!el) return;
+      v = clamp(Math.round(v), 0, 100);
+      const had = parseFloat(getComputedStyle(el).borderTopWidth) > 0, s = el.style;
+      s.borderStyle = 'solid'; s.borderWidth = v + 'px';
+      if (v > 0 && !had && !s.borderTopColor) s.borderColor = HEX0;     // sin trazo previo: arranca con el color de la marca
+      sw.set(v); touch();
+    });
+    bindNum(sr, v => { const el = cur(); if (!el) return; v = clamp(Math.round(v), 0, 1000); el.style.borderRadius = v + 'px'; sr.set(v); touch(); });
+    const setStrokeColor = v => {
+      const el = cur(); if (!el) return;
+      el.style.borderColor = v;
+      if (!(parseFloat(getComputedStyle(el).borderTopWidth) > 0)) { el.style.borderStyle = 'solid'; el.style.borderWidth = '4px'; sw.set(4); }   // elegir color sin trazo: lo hace visible
+      touch();
+    };
+    sct.addEventListener('input', () => {
+      const v = sct.value.trim();
+      if (!v || !CSS.supports('color', v)) { sct.classList.toggle('invalid', !!v); return; }
+      sct.classList.remove('invalid'); setStrokeColor(v);
+      const hx = toHex6(v); if (hx) scp.value = hx;
+    });
+    scp.addEventListener('input', () => { sct.value = scp.value; sct.classList.remove('invalid'); setStrokeColor(scp.value); });
+    const strokeClear = clearBtn('Quitar trazo');
+    strokeClear.addEventListener('click', () => {
+      const el = cur(); if (!el) return;
+      el.style.borderStyle = 'solid'; el.style.borderWidth = '0px'; sw.set(0); touch();
+    });
+
+    /* ---- Sombra (de caja y de texto: mismo modelo color / dirección / difuminado) ---- */
+    function shadowCtl(kind) {
+      const prop = kind === 'box' ? 'boxShadow' : 'textShadow', pre = kind === 'box' ? 'sh' : 'ts';
+      const C = colorField(pre, SHADOW0), t = C.querySelector('[type=text]'), p = C.querySelector('[type=color]');
+      const A = line('Ángulo (°)', { min: 0, max: 360 }), D = line('Distancia (px)', { min: 0, max: 80, nmax: 300 }), B = slider('Difuminado (px)', { min: 0, max: 80, nmax: 300 });
+      const stack = mk('div', 'fx-stack'); stack.appendChild(A.el); stack.appendChild(D.el);
+      const clear = clearBtn(kind === 'box' ? 'Quitar sombra' : 'Quitar sombra del texto');
+      const rad = a => a * Math.PI / 180;
+      function state(el) {
+        const sh = parseShadow(getComputedStyle(el)[prop]), m = (ANG.get(el) || {})[kind];
+        if (!sh) return { has: false, c: SHADOW0, ang: m ? m.a : 45, dist: 0, b: 0 };
+        let dist = Math.hypot(sh.x, sh.y), ang = (Math.atan2(sh.y, sh.x) * 180 / Math.PI + 360) % 360;
+        if (m && Math.round(m.d * Math.cos(rad(m.a))) === Math.round(sh.x) && Math.round(m.d * Math.sin(rad(m.a))) === Math.round(sh.y)) { ang = m.a; dist = m.d; }
+        else if (!dist) ang = m ? m.a : 45;
+        return { has: true, c: sh.c, ang: Math.round(ang), dist: Math.round(dist * 10) / 10, b: sh.b };
+      }
+      function change(patch) {
+        const el = cur(); if (!el) return;
+        let st = state(el);
+        if (!st.has) st = { c: SHADOW0, ang: st.ang, dist: 8, b: 10 };          // primera vez: arranca con una sombra visible
+        st = Object.assign(st, patch);
+        el.style[prop] = fmtShadow({ x: Math.round(st.dist * Math.cos(rad(st.ang))), y: Math.round(st.dist * Math.sin(rad(st.ang))), b: st.b, c: st.c });
+        const m = ANG.get(el) || {}; m[kind] = { a: st.ang, d: st.dist }; ANG.set(el, m);
+        show(st); touch();
+      }
+      function show(st) {
+        idle(t, st.c); p.value = toHex6(st.c) || '#000000';
+        A.set(st.ang); D.set(st.dist); B.set(st.b);
+      }
+      bindNum(A, v => change({ ang: clamp(Math.round(v), 0, 360) }));
+      bindNum(D, v => change({ dist: clamp(v, 0, 300) }));
+      bindNum(B, v => change({ b: clamp(v, 0, 300) }));
+      t.addEventListener('input', () => {
+        const v = t.value.trim();
+        if (!v || !CSS.supports('color', v)) { t.classList.toggle('invalid', !!v); return; }
+        t.classList.remove('invalid'); change({ c: v });
+      });
+      p.addEventListener('input', () => { t.value = p.value; t.classList.remove('invalid'); change({ c: p.value }); });
+      clear.addEventListener('click', () => {
+        const el = cur(); if (!el) return;
+        el.style[prop] = 'none'; const m = ANG.get(el); if (m) delete m[kind];
+        show(state(el)); touch();
+      });
+      return { C, stack, B, clear, sync(el) { show(state(el)); } };
+    }
+    const box = shadowCtl('box'), txt = shadowCtl('text');
+
+    /* ---- Espaciado interno (pestaña dentro de "Fondo") ---- */
+    const pd = slider('Espaciado interno (px)', { min: 0, max: 120, nmax: 400 });
+    bindNum(pd, v => { const el = cur(); if (!el) return; v = clamp(Math.round(v), 0, 400); el.style.padding = v + 'px'; pd.set(v); touch(); });
+    card._fxPad = pd.el;
+
+    function sync() {
+      const el = cur(); if (!el) return;
+      const cs = getComputedStyle(el), w = parseFloat(cs.borderTopWidth) || 0;
+      sw.set(w); sr.set(Math.round(parseFloat(cs.borderTopLeftRadius) || 0)); pd.set(Math.round(parseFloat(cs.paddingTop) || 0));
+      const col = w > 0 ? cs.borderTopColor : (el.style.borderTopColor || HEX0);
+      idle(sct, col); scp.value = toHex6(col) || HEX0;
+      box.sync(el);
+      if (el.dataset.f) txt.sync(el);
+    }
+
+    return {
+      stroke: [['Grosor', [sw.el]], ['Color', [sc]], ['Redondeado', [sr.el]]],
+      shadow: [['Color', [box.C]], ['Dirección', [box.stack]], ['Difuminado', [box.B.el]]],
+      tshadow: miniTabs([['Color', [txt.C]], ['Dirección', [txt.stack]], ['Difuminado', [txt.B.el]]], txt.clear),
+      strokeClear, shadowClear: box.clear, sync
+    };
+  }
+  return { build };
+})();
+</script>
+<style>
+/* Trazo / Sombra / Espaciado interno */
+.fx-stack{display:flex;flex-direction:column;gap:6px;width:100%;min-width:0}
+.fx-line{width:100%}
+.fx-line .fx-l{flex:0 0 84px;font-size:.78rem;font-weight:600}
+.fxtabs{display:flex;flex-direction:column;gap:8px;width:100%;min-width:0}
+.fxtabs>.subtabs-row{margin:0}
+.fxtabs>.sub.on{display:flex}
+.tool.one>.subtabs-row{display:none}
+.cp-pad-w{margin-top:6px}
+</style>
+<script>
 /* Barra inferior contextual: reubica los controles existentes (mismos nodos, misma lógica) */
 (function () {
   const IC = {
@@ -4793,13 +5101,15 @@ fitPreviews();
     reset: '<path d="M4 12a8 8 0 1 0 2.6-5.9"/><path d="M4 4v5h5"/>',
     ratio: '<rect x="5" y="3" width="14" height="18" rx="2"/><path d="M9 7h3M12 17h3"/>',
     font: '<path d="M6 20l6-16 6 16M8.6 14h6.8M4 20h4M16 20h4"/>',
-    format: '<path d="M7 5h6a3.5 3.5 0 0 1 0 7H7zM7 12h7a3.5 3.5 0 0 1 0 7H7z"/>'
+    format: '<path d="M7 5h6a3.5 3.5 0 0 1 0 7H7zM7 12h7a3.5 3.5 0 0 1 0 7H7z"/>',
+    stroke: '<rect x="4" y="4" width="16" height="16" rx="5"/><rect x="9" y="9" width="6" height="6" rx="1.5"/>',
+    shadow: '<rect x="4" y="4" width="12" height="12" rx="2.5"/><path d="M8 20h9a3 3 0 0 0 3-3V8"/>'
   };
   const svg = n => '<svg viewBox="0 0 24 24" aria-hidden="true">' + IC[n] + '</svg>';
   /* id: [etiqueta, icono, tipo]  (p = abre panel, a = acción) */
   const T = {
     add: ['Añadir', 'add', 'p'], pagebg: ['Fondo', 'pagebg', 'p'], deco: ['Decorativos', 'deco', 'p'], layers: ['Capas', 'layers', 'p'], ratio: ['Proporción', 'ratio', 'p'], font: ['Fuente', 'font', 'p'], format: ['Formato', 'format', 'p'],
-    size: ['Tamaño', 'size', 'p'], color: ['Color', 'color', 'p'], bg: ['Fondo', 'bg', 'p'], align: ['Alinear', 'align', 'p'],
+    size: ['Tamaño', 'size', 'p'], color: ['Color', 'color', 'p'], bg: ['Fondo', 'bg', 'p'], stroke: ['Trazo', 'stroke', 'p'], shadow: ['Sombra', 'shadow', 'p'], align: ['Alinear', 'align', 'p'],
     spacing: ['Espaciado', 'spacing', 'p'], order: ['Orden', 'order', 'p'], arrange: ['Posición', 'arrange', 'p'], zoom: ['Zoom', 'zoom', 'p'],
     edit: ['Editar', 'edit', 'a'], swap: ['Cambiar', 'photo', 'a'], dup: ['Duplicar', 'dup', 'a'],
     lock: ['Bloquear', 'lock', 'a'], del: ['Eliminar', 'del', 'a'], close: ['Listo', 'close', 'a']
@@ -4832,10 +5142,10 @@ fitPreviews();
     const locked = isLocked(el), photo = el.classList.contains('photo'), st = el.classList.contains('pc-sticker'), txt = !!el.dataset.f;
     let t, k;
     if (locked) { k = 'L'; t = ['lock', 'dup']; }
-    else if (photo) { k = 'P'; t = ['swap', 'zoom', 'order', 'arrange', 'dup', 'lock', 'del']; }
-    else if (st) { k = 'S'; t = ['edit', 'color', 'bg', 'arrange', 'lock', 'del']; }
-    else if (txt) { k = 'T'; t = ['edit', 'font', 'format', 'size', 'color', 'bg', 'align', 'spacing', 'order', 'arrange', 'dup', 'lock', 'del']; }
-    else { k = 'O'; t = ['color', 'bg', 'order', 'arrange', 'dup', 'lock', 'del']; }
+    else if (photo) { k = 'P'; t = ['swap', 'zoom', 'stroke', 'shadow', 'order', 'arrange', 'dup', 'lock', 'del']; }
+    else if (st) { k = 'S'; t = ['edit', 'color', 'bg', 'stroke', 'shadow', 'arrange', 'lock', 'del']; }
+    else if (txt) { k = 'T'; t = ['edit', 'font', 'format', 'size', 'color', 'bg', 'stroke', 'align', 'spacing', 'order', 'arrange', 'dup', 'lock', 'del']; }
+    else { k = 'O'; t = ['color', 'bg', 'stroke', 'shadow', 'order', 'arrange', 'dup', 'lock', 'del']; }
     return { sig: k + (el.dataset.uid || ''), tools: ['close'].concat(t), locked };
   }
 
@@ -4896,6 +5206,8 @@ fitPreviews();
       subs.forEach(x => { if (!x.act) d.appendChild(x.p); });
       body.appendChild(d);
       pick(0);
+      d._pick = pick;
+      return d;
     };
     const AL = {
       left: '<path d="M4 4v16"/><rect x="7" y="7" width="12" height="4" rx="1"/><rect x="7" y="13" width="8" height="4" rx="1"/>',
@@ -4912,7 +5224,18 @@ fitPreviews();
     });
     const rs = q('.txt-reset');
     if (rs) { const t = rs.textContent.trim(); rs.title = t; rs.setAttribute('aria-label', t); rs.innerHTML = svg('reset'); }
-    box('size', [fld('.sz-r')]); box('color', [fld('.tc-p')]); box('bg', [fld('.fg-p')]);
+    const fx = FXUI.build(card);
+    box('size', [fld('.sz-r')]);
+    const colorTool = tabbed('color', [['Color', [fld('.tc-p')]], ['Sombra', [fx.tshadow]]]);   // "Sombra" (de texto) solo se ve en textos
+    box('bg', [fld('.fg-p')]);
+    tabbed('stroke', fx.stroke, { nodes: [fx.strokeClear] });
+    tabbed('shadow', fx.shadow, { nodes: [fx.shadowClear] });
+    card._fxSync = () => {
+      fx.sync();
+      const el = selected && card.querySelector('.piece').contains(selected) ? selected : null, isTxt = !!(el && el.dataset.f);
+      colorTool.classList.toggle('one', !isTxt);
+      if (!isTxt) colorTool._pick(0);
+    };
     box('align', [fld('[data-ta]')], 'txt-block');
     tabbed('spacing', [['Interlineado', [fld('.lh-r')], 'txt-block'], ['Interletrado', [fld('.ls-r')], 'txt-block']], { nodes: [q('.txt-reset')], cls: 'txt-block' });
     box('zoom', [blk('.zm-r')]);
@@ -4971,7 +5294,7 @@ fitPreviews();
   const _ra = refreshAll;
   refreshAll = function () {
     _ra.apply(this, arguments);
-    document.querySelectorAll('.card').forEach(c => c._dockSync && c._dockSync());
+    document.querySelectorAll('.card').forEach(c => { c._dockSync && c._dockSync(); c._fxSync && c._fxSync(); });
   };
   document.querySelectorAll('.card').forEach(c => c._dockSync && c._dockSync());
 
@@ -5176,7 +5499,8 @@ fitPreviews();
     if (o.clear) t.dataset.clr = '1';
     const cp = document.createElement('div');
     cp.className = 'cp';
-    cp.innerHTML = (o.grad ? '<div class="subtabs"><button type="button" data-m="solid">Colores</button><button type="button" data-m="grad">Degradados</button></div>' : '') + '<div class="cp-row"></div>';
+    cp.innerHTML = (o.grad ? '<div class="subtabs"><button type="button" data-m="solid">Colores</button><button type="button" data-m="grad">Degradados</button>' + (o.pad ? '<button type="button" data-m="pad">Espaciado interno</button>' : '') + '</div>' : '') + '<div class="cp-row"></div>';
+    if (o.pad) { o.pad.classList.add('cp-pad-w'); o.pad.hidden = true; cp.appendChild(o.pad); }
     row0.style.display = 'none';
     row0.after(cp);
     const row = cp.querySelector('.cp-row');
@@ -5188,6 +5512,8 @@ fitPreviews();
     };
     const fill = () => {
       cp.querySelectorAll('[data-m]').forEach(b => b.classList.toggle('on', b.dataset.m === mode));
+      if (o.pad) { o.pad.hidden = mode !== 'pad'; row.hidden = mode === 'pad'; }
+      if (mode === 'pad') return mark();
       const list = mode === 'grad' ? saved.filter(isG).concat(GRAD) : saved.filter(v => !isG(v)).concat(SOLID);
       row.innerHTML = '<button type="button" class="cp-add" aria-label="Nuevo color"></button>' +
         (o.clear && mode === 'solid' ? '<button type="button" class="cp-sw none" data-v="" aria-label="Sin fondo"></button>' : '') +
@@ -5198,7 +5524,7 @@ fitPreviews();
       if (t.value !== last) {
         last = t.value;
         const m = o.grad && isG(last) ? 'grad' : 'solid';
-        if (m !== mode) mode = m;
+        if (mode !== 'pad' && m !== mode) mode = m;
         fill();
       } else mark();
     };
@@ -5216,8 +5542,9 @@ fitPreviews();
   document.querySelectorAll('.card').forEach(card => {
     const side = card.querySelector('.side');
     if (!side) return;
-    [['.tc-t', 'Color de texto', false, false], ['.fg-t', 'Fondo del elemento', true, true], ['.pz-t', 'Fondo de la pieza', true, false]]
-      .forEach(a => { const t = side.querySelector(a[0]); if (t) build(t, { title: a[1], grad: a[2], clear: a[3] }); });
+    [['.tc-t', 'Color de texto', false, false], ['.fg-t', 'Fondo del elemento', true, true, card._fxPad], ['.pz-t', 'Fondo de la pieza', true, false],
+     ['.st-t', 'Color del trazo', false, false], ['.sh-t', 'Color de la sombra', false, false], ['.ts-t', 'Color de la sombra del texto', false, false]]
+      .forEach(a => { const t = side.querySelector(a[0]); if (t) build(t, { title: a[1], grad: a[2], clear: a[3], pad: a[4] }); });
   });
 
   /* Mantener la fila al día con la selección / deshacer, y cerrar el editor al cambiar de elemento */
