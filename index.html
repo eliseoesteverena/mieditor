@@ -173,12 +173,22 @@ body { font-family: 'Inter', system-ui, sans-serif; background: var(--paper); co
 /* Tiradores de tamaño (solo vista previa) */
 .rs-box { position: absolute; display: none; pointer-events: none; z-index: 9000; border: calc(2px * var(--inv, 1)) solid var(--ink); box-shadow: 0 0 0 calc(1.5px * var(--inv, 1)) var(--mustard) }
 .rs-box.on { display: block }
-.rs-h { --hit: 22px; --dot: 14px; position: absolute; display: flex; align-items: center; justify-content: center; width: calc(var(--hit) * var(--inv, 1)); height: calc(var(--hit) * var(--inv, 1)); margin: calc(var(--hit) * var(--inv, 1) / -2) 0 0 calc(var(--hit) * var(--inv, 1) / -2); pointer-events: auto; touch-action: none }
+.rs-h { --hit: 18px; --dot: 10px; position: absolute; display: flex; align-items: center; justify-content: center; width: calc(var(--hit) * var(--inv, 1)); height: calc(var(--hit) * var(--inv, 1)); margin: calc(var(--hit) * var(--inv, 1) / -2) 0 0 calc(var(--hit) * var(--inv, 1) / -2); pointer-events: auto; touch-action: none }
 .rs-h::before { content: ""; box-sizing: border-box; width: calc(var(--dot) * var(--inv, 1)); height: calc(var(--dot) * var(--inv, 1)); background: var(--white); border: calc(2px * var(--inv, 1)) solid var(--ink); border-radius: calc(4px * var(--inv, 1)) }
 @media (pointer: coarse) {
-  .rs-h { --hit: 44px; --dot: 18px }
+  .rs-h { --hit: 34px; --dot: 13px }
   .rs-h[data-h="n"], .rs-h[data-h="s"], .rs-h[data-h="e"], .rs-h[data-h="w"] { display: none }
 }
+
+/* Ícono de mover: va FUERA del elemento (arriba, centrado) para poder agarrarlo aunque el elemento sea chico y los tiradores lo tapen. Discreto: chico y translúcido; el área de toque es mayor que lo que se ve */
+.rs-mv { --mv: 22px; --gap: 16px; position: absolute; left: 50%; top: 0; display: flex; align-items: center; justify-content: center; box-sizing: border-box; width: calc(var(--mv) * var(--inv, 1)); height: calc(var(--mv) * var(--inv, 1)); margin: calc((var(--mv) + var(--gap)) * var(--inv, 1) * -1) 0 0 calc(var(--mv) * var(--inv, 1) / -2); pointer-events: auto; touch-action: none; cursor: grab; background: rgba(20, 18, 16, .5); border-radius: 50%; box-shadow: 0 0 0 calc(1px * var(--inv, 1)) rgba(255, 255, 255, .6); opacity: .8; transition: opacity .12s }
+.rs-mv::after { content: ""; position: absolute; inset: calc(-6px * var(--inv, 1)); border-radius: 50% }
+.rs-mv:hover, .rs-mv:active { opacity: 1 }
+.rs-mv:active { cursor: grabbing }
+.rs-mv svg { width: 58%; height: 58%; fill: none; stroke: #fff; stroke-width: 2.2; stroke-linecap: round; stroke-linejoin: round; pointer-events: none }
+.rs-mv.below { top: 100%; margin-top: calc(var(--gap) * var(--inv, 1)) }
+.rs-mv.inside { top: 50%; margin-top: calc(var(--mv) * var(--inv, 1) / -2) }
+@media (pointer: coarse) { .rs-mv { --mv: 30px; --gap: 25px } .rs-mv::after { inset: calc(-7px * var(--inv, 1)) } }
 
 /* Menú contextual (solo vista previa) */
 .ctx-menu { position: fixed; z-index: 10000; display: none; flex-direction: column; min-width: 190px; padding: 4px; background: var(--white); border: 1.5px solid var(--ink); border-radius: var(--radius); box-shadow: var(--shadow) }
@@ -1338,6 +1348,12 @@ document.addEventListener('pointerdown', e => {
   }
   if (pieceEl && !editingThis) select(el);
   if (!el || editingThis || isLocked(el) || gesture) return;
+  startDrag(el, e);
+  e.preventDefault();
+});
+
+/* Inicia el arrastre de un elemento (lo usan el propio elemento y el ícono de mover) */
+function startDrag(el, e) {
   dragState = {
     el,
     s: scaleOf(el.closest('.piece')),
@@ -1349,8 +1365,7 @@ document.addEventListener('pointerdown', e => {
     targets: snapOn() ? snapTargets(el) : null,      // cajas de todo lo demás contra lo que se alinea
     hasGuides: false
   };
-  e.preventDefault();
-});
+}
 
 document.addEventListener('pointermove', e => {
   if (!dragState) return;
@@ -2192,6 +2207,12 @@ function ensureBox(piece) {
       d.style.cursor = CURSORS[h];
       box.appendChild(d);
     });
+    const mv = document.createElement('div');
+    mv.className = 'rs-mv';
+    mv.title = 'Mover';
+    mv.setAttribute('aria-label', 'Mover elemento');
+    mv.innerHTML = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v18M3 12h18M12 3l-3 3M12 3l3 3M12 21l-3-3M12 21l3-3M3 12l3-3M3 12l3 3M21 12l-3-3M21 12l-3 3"/></svg>';
+    box.appendChild(mv);
     piece.appendChild(box);
   }
   return box;
@@ -2208,6 +2229,14 @@ function updateBox() {
     if (!show) return;
     const r = rectIn(selected);
     Object.assign(box.style, { left: r.x + 'px', top: r.y + 'px', width: r.w + 'px', height: r.h + 'px' });
+    const mv = box.querySelector('.rs-mv');
+    if (mv) {
+      const cs = getComputedStyle(mv), inv = parseFloat(piece.style.getPropertyValue('--inv')) || 1;
+      const need = (parseFloat(cs.getPropertyValue('--mv')) + parseFloat(cs.getPropertyValue('--gap'))) * inv;
+      const fitsTop = r.y - need >= 0, fitsBottom = r.y + r.h + need <= piece.offsetHeight;
+      mv.classList.toggle('below', !fitsTop && fitsBottom);
+      mv.classList.toggle('inside', !fitsTop && !fitsBottom);
+    }
   });
 }
 
@@ -2229,6 +2258,15 @@ document.addEventListener('pointerdown', e => {
     ratio: el.offsetWidth / (el.offsetHeight || 1),
     keep: hd.length === 2 || e.shiftKey
   };
+}, true);
+
+/* Ícono de mover: mantener apretado y arrastrar mueve el elemento seleccionado */
+document.addEventListener('pointerdown', e => {
+  const m = e.target.closest('.rs-mv');
+  if (!m || !selected || isLocked(selected) || gesture) return;
+  e.stopPropagation();
+  e.preventDefault();
+  startDrag(selected, e);
 }, true);
 
 /* ---------- Ajuste de imagen dentro del marco ---------- */
@@ -2603,6 +2641,7 @@ function setRatio(fmt, o = {}) {
   refreshAll();
   if (typeof updateHistUI === 'function') updateHistUI();
   if (typeof renderPages === 'function') renderPages();
+  if (o.shift !== false) markDirty();                       // el proyecto guarda su proporción (takeRecords() de arriba descarta el aviso del observador)
 }
 
 function setCurrent(fmt) {
@@ -4697,7 +4736,7 @@ renderAllLibs();
 bootProject();      // abre el último proyecto guardado o crea uno nuevo
 initHistory();
 document.querySelectorAll('.fmt-bar button[data-fmt]').forEach(b => b.addEventListener('click', () => setCurrent(b.dataset.fmt)));
-setCurrent('4x5');
+setCurrent();          // respeta la proporción del proyecto abierto (antes forzaba 4:5 en cada carga)
 let lastVw = window.innerWidth;
 window.addEventListener('resize', () => {
   if (document.body.classList.contains('editing')) return;   // el teclado cambia el alto: no re-escalar
@@ -5343,8 +5382,8 @@ html body .ff-list button.ff-i.on{background:var(--ui-accent-soft)}
 </script>
 <style>
 /* ===== Carrusel de páginas ===== */
-.pg-bar{position:fixed;left:0;right:0;bottom:var(--dock-h,0px);z-index:9400;background:var(--ui-surface,#fff);color:var(--ui-text,#111);border-top:1px solid var(--ui-line,#ddd);font-family:'Inter',system-ui,sans-serif}
-.pg-track{display:flex;align-items:center;overflow-x:auto;padding:8px 12px;scrollbar-width:none;touch-action:pan-x;-webkit-overflow-scrolling:touch}
+.pg-bar{display:flex;align-items:center;position:fixed;left:0;right:0;bottom:var(--dock-h,0px);z-index:9400;background:var(--ui-surface,#fff);color:var(--ui-text,#111);border-top:1px solid var(--ui-line,#ddd);font-family:'Inter',system-ui,sans-serif}
+.pg-track{flex:1 1 auto;min-width:0;display:flex;align-items:center;overflow-x:auto;padding:6px 10px 6px 4px;scrollbar-width:none;touch-action:pan-x;-webkit-overflow-scrolling:touch}
 .pg-track::-webkit-scrollbar{display:none}
 .pg-th{position:relative;flex:0 0 auto;border-radius:8px;cursor:pointer;background:var(--paper,#f7f5f0);user-select:none;-webkit-user-select:none;-webkit-touch-callout:none}
 .pg-clip{position:absolute;inset:0;overflow:hidden;border-radius:8px;pointer-events:none}
@@ -5357,8 +5396,18 @@ html body .ff-list button.ff-i.on{background:var(--ui-accent-soft)}
 .pg-th.drop-a::before{right:-9px}
 .pg-sep{flex:0 0 auto;width:34px;display:flex;justify-content:center}
 .pg-add{width:26px;height:26px;padding:0;border:1px solid var(--ui-line,#ccc);border-radius:50%;background:var(--ui-surface,#fff);color:var(--ui-text,#111);font:600 18px/1 'Inter',system-ui,sans-serif;cursor:pointer}
-.pg-tile{flex:0 0 auto;height:84px;min-width:72px;margin-left:8px;padding:0 12px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;border:0;border-radius:10px;background:var(--ui-raised,#eee);color:var(--ui-text,#111);font:600 .68rem 'Inter',system-ui,sans-serif;cursor:pointer}
+.pg-tile{flex:0 0 auto;height:64px;min-width:72px;margin-left:8px;padding:0 12px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;border:0;border-radius:10px;background:var(--ui-raised,#eee);color:var(--ui-text,#111);font:600 .68rem 'Inter',system-ui,sans-serif;cursor:pointer}
 .pg-bar svg{width:22px;height:22px;flex:0 0 auto;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+.pg-toggle{flex:0 0 auto;width:30px;height:30px;margin-left:8px;padding:0;display:flex;align-items:center;justify-content:center;border:0;border-radius:8px;background:var(--ui-raised,#eee);color:var(--ui-text,#111);cursor:pointer;-webkit-tap-highlight-color:transparent}
+.pg-bar .pg-toggle svg{width:18px;height:18px;stroke-width:2.4}
+.pg-bar.collapsed .pg-toggle{width:26px;height:26px;margin-left:8px;background:none;opacity:.7}
+.pg-bar.collapsed .pg-track{padding-top:0;padding-bottom:0}
+.pg-bar.collapsed .pg-track>:first-child{margin-left:auto}
+.pg-bar.collapsed .pg-track>:last-child{margin-right:auto}
+.pg-dot{flex:0 0 auto;width:24px;height:30px;padding:0;border:0;background:none;display:flex;align-items:center;justify-content:center;cursor:pointer;-webkit-tap-highlight-color:transparent}
+@media (pointer:coarse){.pg-dot{width:28px;height:34px}.pg-bar.collapsed .pg-toggle{width:32px;height:32px}}
+.pg-dot::before{content:"";width:7px;height:7px;border-radius:50%;background:var(--ui-text,#111);opacity:.28;transition:width .15s,opacity .15s}
+.pg-dot.on::before{width:16px;border-radius:4px;background:var(--ui-accent,#7c5cff);opacity:1}
 .pg-menu{position:absolute;right:12px;bottom:calc(100% + 6px);display:flex;flex-direction:column;min-width:210px;padding:6px;border:1px solid var(--ui-line,#ccc);border-radius:12px;background:var(--ui-surface,#fff);box-shadow:0 8px 28px rgba(0,0,0,.3)}
 .pg-menu[hidden]{display:none}
 .pg-menu button{display:flex;align-items:center;gap:12px;min-height:44px;padding:0 14px;border:0;border-radius:8px;background:none;color:inherit;font:600 .88rem 'Inter',system-ui,sans-serif;text-align:left;cursor:pointer}
@@ -5377,15 +5426,25 @@ html body .ff-list button.ff-i.on{background:var(--ui-accent-soft)}
   const piece = () => document.querySelector('.piece');
   const ratio = () => document.querySelector('.card').dataset.fmt;
   const ic = d => '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="' + d + '"/></svg>';
-  const TH = 84;
+  const TH = 64;
   const bar = document.createElement('div');
   bar.className = 'pg-bar';
   bar.setAttribute('aria-label', 'Páginas');
-  bar.innerHTML = '<div class="pg-track"></div><div class="pg-menu" hidden>' +
+  const CKEY = 'ig.pgbar.collapsed';
+  let collapsed = false;
+  try { collapsed = localStorage.getItem(CKEY) === '1'; } catch (_) {}
+  bar.innerHTML = '<button type="button" class="pg-toggle"></button><div class="pg-track"></div><div class="pg-menu" hidden>' +
     '<button type="button" data-a="dup">' + ic('M8 8h11v11H8zM5 15V5h10') + '<span>Duplicar página</span></button>' +
     '<button type="button" data-a="del">' + ic('M5 7h14M10 7V4h4v3M7 7l1 13h8l1-13') + '<span>Eliminar página</span></button></div>';
   document.body.appendChild(bar);
-  const track = bar.querySelector('.pg-track'), menu = bar.querySelector('.pg-menu');
+  const track = bar.querySelector('.pg-track'), menu = bar.querySelector('.pg-menu'), toggle = bar.querySelector('.pg-toggle');
+  function syncToggle() {
+    bar.classList.toggle('collapsed', collapsed);
+    toggle.innerHTML = ic(collapsed ? 'M6 15l6-6 6 6' : 'M6 9l6 6 6-6');
+    toggle.title = collapsed ? 'Mostrar miniaturas' : 'Colapsar páginas';
+    toggle.setAttribute('aria-label', toggle.title);
+    toggle.setAttribute('aria-expanded', String(!collapsed));
+  }
 
   const snapFor = pg => pg === CURPG ? snapOf(piece()) : pg.stack[pg.idx];
   function fillMini(clip, snap, sc, fmt) {
@@ -5403,6 +5462,15 @@ html body .ff-list button.ff-i.on{background:var(--ui-accent-soft)}
 
   window.renderPages = function (center) {
     if (!CURPG || !PAGES.length) return;
+    syncToggle();
+    if (collapsed) {                                       // colapsado: solo puntitos (uno por página)
+      track.innerHTML = PAGES.map((pg, i) => '<button type="button" class="pg-dot' + (pg === CURPG ? ' on' : '') + '" data-i="' + i + '" aria-label="Página ' + (i + 1) + '"' + (pg === CURPG ? ' aria-current="true"' : '') + '></button>').join('');
+      const od = track.querySelector('.pg-dot.on');
+      if (od) track.scrollLeft = od.offsetLeft - (track.clientWidth - od.offsetWidth) / 2;
+      document.documentElement.style.setProperty('--pg-h', bar.offsetHeight + 'px');
+      fitPreviews();
+      return;
+    }
     const fmt = ratio(), sc = TH / RATIO_H[fmt], tw = Math.round(1080 * sc), parts = [];
     PAGES.forEach((pg, i) => {
       if (i) parts.push('<div class="pg-sep"><button type="button" class="pg-add" data-at="' + i + '" aria-label="Añadir página aquí">+</button></div>');
@@ -5494,12 +5562,18 @@ html body .ff-list button.ff-i.on{background:var(--ui-accent-soft)}
       openMenu(track.querySelector('.pg-th.on'));
       return;
     }
-    const t = e.target.closest('.pg-th, .pg-add, .pg-end');
+    const t = e.target.closest('.pg-th, .pg-add, .pg-end, .pg-dot');
     if (!t) return;
     menu.hidden = true;
-    if (t.classList.contains('pg-th')) gotoPage(PAGES[+t.dataset.i]);
+    if (t.classList.contains('pg-th') || t.classList.contains('pg-dot')) gotoPage(PAGES[+t.dataset.i]);
     else if (t.classList.contains('pg-add')) addPage(+t.dataset.at);
     else addPage(PAGES.length);
+  });
+  toggle.addEventListener('click', () => {
+    collapsed = !collapsed;
+    menu.hidden = true;
+    try { localStorage.setItem(CKEY, collapsed ? '1' : '0'); } catch (_) {}
+    renderPages(true);
   });
   menu.addEventListener('click', e => {
     const b = e.target.closest('button');
