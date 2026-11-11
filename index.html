@@ -2407,7 +2407,7 @@ ctxMenu.addEventListener('click', e => {
 document.addEventListener('pointerdown', e => {
   if (!e.target.closest('#ctx-menu')) ctxMenu.classList.remove('open');
 });
-window.addEventListener('scroll', () => ctxMenu.classList.remove('open'), true);
+window.addEventListener('scroll', e => { if (!ctxMenu.contains(e.target)) ctxMenu.classList.remove('open'); }, true);   // el scroll del propio menú no lo cierra
 
 /* ---------- Teclado: Supr, flechas, Ctrl+D, Esc ---------- */
 document.addEventListener('keydown', e => {
@@ -2655,22 +2655,8 @@ function setCurrent(fmt) {
 
 /* Aviso con acción (por ejemplo, Deshacer) */
 let toastTimer = null;
-function toast(msg, label, action) {
-  const t = document.getElementById('toast');
-  t.innerHTML = '';
-  const sp = document.createElement('span');
-  sp.textContent = msg;
-  t.appendChild(sp);
-  if (label) {
-    const b = document.createElement('button');
-    b.textContent = label;
-    b.addEventListener('click', () => { t.classList.remove('on'); action(); });
-    t.appendChild(b);
-  }
-  t.classList.add('on');
-  clearTimeout(toastTimer);
-  toastTimer = setTimeout(() => t.classList.remove('on'), 6000);
-}
+/* Sin avisos emergentes: toast() ya no muestra nada (se conserva la función para no romper las llamadas) */
+function toast() {}
 
 function setBusy(on) { document.getElementById('busy').classList.toggle('on', on); }
 
@@ -3337,6 +3323,11 @@ const PROJECT_SCHEMA = /*SCHEMA_START*/{
         "locked": {
           "type": "boolean"
         },
+        "group": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9_-]{1,40}$",
+          "description": "Id del grupo al que pertenece (los elementos con el mismo id se mueven y escalan juntos)."
+        },
         "role": {
           "enum": [
             "eyebrow",
@@ -3404,6 +3395,11 @@ const PROJECT_SCHEMA = /*SCHEMA_START*/{
         },
         "locked": {
           "type": "boolean"
+        },
+        "group": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9_-]{1,40}$",
+          "description": "Id del grupo al que pertenece (los elementos con el mismo id se mueven y escalan juntos)."
         },
         "image": {
           "oneOf": [
@@ -3493,6 +3489,11 @@ const PROJECT_SCHEMA = /*SCHEMA_START*/{
         "locked": {
           "type": "boolean"
         },
+        "group": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9_-]{1,40}$",
+          "description": "Id del grupo al que pertenece (los elementos con el mismo id se mueven y escalan juntos)."
+        },
         "label": {
           "type": "string",
           "maxLength": 200
@@ -3552,6 +3553,11 @@ const PROJECT_SCHEMA = /*SCHEMA_START*/{
         },
         "locked": {
           "type": "boolean"
+        },
+        "group": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9_-]{1,40}$",
+          "description": "Id del grupo al que pertenece (los elementos con el mismo id se mueven y escalan juntos)."
         },
         "name": {
           "type": "string",
@@ -4051,6 +4057,8 @@ function serializeElement(el, used) {
     z: Math.round(zOf(el)),
     locked: isLocked(el)
   };
+  const gid = el.dataset.group;      // solo se guarda si el grupo tiene 2 o más miembros en la pieza
+  if (gid && el.closest('.piece') && [...el.closest('.piece').querySelectorAll('.drag')].filter(d => d.dataset.group === gid).length > 1) common.group = gid;
   if (el.classList.contains('photo')) {
     const im = el.querySelector('.ph-img');
     const ref = im && im.dataset.srcId;
@@ -4152,6 +4160,7 @@ function applyElementData(el, e) {
   el.dataset.locked = e.locked ? '1' : '0';
   el.dataset.rot = e.rotation;
   el.style.zIndex = e.z;
+  if (e.group) el.dataset.group = e.group; else delete el.dataset.group;
   const L = e.layout;
   if (L.mode === 'absolute') {
     el.style.position = 'absolute';
@@ -5076,6 +5085,850 @@ const FXUI = (function () {
 .tool.one>.subtabs-row{display:none}
 .cp-pad-w{margin-top:6px}
 </style>
+<style>
+/* ===== Selección múltiple y agrupación ===== */
+.stage .piece.multi-mode { touch-action: none }
+body.ms-mode .stage { outline: 2px solid var(--ui-accent, #7280ff); outline-offset: 2px }
+.rs-box.is-multi { border-style: dashed }
+.rs-box.is-multi .rs-h[data-h="n"], .rs-box.is-multi .rs-h[data-h="s"], .rs-box.is-multi .rs-h[data-h="e"], .rs-box.is-multi .rs-h[data-h="w"] { display: none !important }
+.ms-marquee { position: absolute; box-sizing: border-box; border: calc(1.5px * var(--inv, 1)) dashed var(--ui-accent, #7280ff); background: rgba(114, 128, 255, .14) }
+.ms-count { flex: 0 0 auto; align-self: center; margin: 0 6px; padding: 5px 12px; border-radius: 999px; background: var(--ui-accent-soft, #2a2f55); color: var(--ui-accent, #7280ff); font: 700 .72rem 'Inter', system-ui, sans-serif; white-space: nowrap }
+@media (min-width: 901px) { .ms-count { flex: 1 0 100%; text-align: center; margin: 0 } }
+.ms-chip { flex: 0 0 auto; min-width: 22px; padding: 1px 6px; border-radius: 999px; background: hsl(var(--gh, 230) 62% 46%); font: 700 .66rem/1.6 'Inter', system-ui, sans-serif; text-align: center }
+html body .side .ms-chip { color: #fff !important }
+.ms-panel { display: flex; flex-direction: column; gap: 10px; width: 100% }
+.ms-panel .subtabs { margin: 0 }
+.ms-panel .seg { align-items: center }
+/* Botón ⋯ (menú de opciones) junto al ícono de mover */
+.rs-more { --mv: 22px; --gap: 16px; position: absolute; left: 50%; top: 0; display: flex; align-items: center; justify-content: center; box-sizing: border-box; width: calc(36px * var(--inv, 1)); height: calc(var(--mv) * var(--inv, 1)); margin: calc((var(--mv) + var(--gap)) * var(--inv, 1) * -1) 0 0 calc((var(--mv) / 2 + 8px) * var(--inv, 1)); pointer-events: auto; touch-action: none; cursor: pointer; background: rgba(20, 18, 16, .62); border-radius: 99px; box-shadow: 0 0 0 calc(1px * var(--inv, 1)) rgba(255, 255, 255, .6); opacity: .9; transition: opacity .12s }
+.rs-more::after { content: ""; position: absolute; inset: calc(-6px * var(--inv, 1)); border-radius: 99px }
+.rs-more:hover { opacity: 1 }
+.rs-more svg { width: 66%; height: 66%; fill: #fff; pointer-events: none }
+.rs-more.below { top: 100%; margin-top: calc(var(--gap) * var(--inv, 1)) }
+.rs-more.inside { top: 50%; margin-top: calc(var(--mv) * var(--inv, 1) / -2) }
+@media (pointer: coarse) { .rs-more { --mv: 30px; --gap: 25px; width: calc(46px * var(--inv, 1)); margin-left: calc((var(--mv) / 2 + 10px) * var(--inv, 1)) } }
+.piece.is-editing .rs-more { display: none !important }
+.rs-box.is-locked { border-style: dotted }
+.rs-box.is-locked .rs-h, .rs-box.is-locked .rs-mv { display: none !important }
+.rs-box.is-locked .rs-more { margin-left: calc(-18px * var(--inv, 1)) }
+@media (pointer: coarse) { .rs-box.is-locked .rs-more { margin-left: calc(-23px * var(--inv, 1)) } }
+.ctx-menu { max-height: calc(100vh - 16px); overflow-y: auto; overscroll-behavior: contain; touch-action: pan-y; -webkit-overflow-scrolling: touch }
+.ctx-menu button[data-m="del"] { position: sticky; bottom: 0; background: var(--white); color: #d12d2d; font-weight: 600; box-shadow: 0 -1px 0 rgba(0,0,0,.2) }
+.ctx-menu button[data-m="del"]:disabled { color: inherit }
+</style>
+<script>
+/* ============================================================
+   SELECCIÓN MÚLTIPLE Y AGRUPACIÓN
+   - Varios elementos seleccionados a la vez: Mayús/Ctrl/Cmd + clic, rectángulo de selección
+     (arrastrar sobre un espacio vacío), modo "Varios" (táctil), Ctrl+A y la lista de Capas.
+   - Con varios seleccionados: mover, escalar (tiradores de las esquinas), alinear, distribuir,
+     ordenar, duplicar, bloquear y eliminar, todo en bloque.
+   - Agrupar (Ctrl+G) / Desagrupar (Ctrl+Mayús+G): un grupo es un id compartido (data-group) entre
+     elementos de la misma pieza. No cambia el DOM ni el diseño: se guarda en el proyecto (campo
+     "group"), entra en el historial de deshacer y no afecta a la exportación.
+   - Un clic sobre un grupo ya seleccionado selecciona solo ese elemento (para editarlo suelto).
+   ============================================================ */
+(function () {
+  'use strict';
+  const _select = select, _updateBox = updateBox, _restore = restore, _deleteEl = deleteEl,
+        _duplicateEl = duplicateEl, _renderList = renderList, _busy = busyInteracting;
+
+  let SEL = [];                 // selección múltiple (2 o más). Con 1 solo elemento se usa `selected`
+  let multiMode = false;        // modo "Varios": cada toque suma o quita un elemento
+  let force = false;            // true = select() actúa sobre un solo elemento, sin expandir grupos
+  let mdrag = null, mres = null, mq = null, mtap = null, moreTap = null;
+  let CLIP = null;              // portapapeles interno (sirve entre páginas)
+  let menuAt = 0;               // cuándo se abrió el menú (para ignorar el "clic fantasma" del mismo toque)
+  let ctxAt = null;             // dónde se hizo clic derecho en un espacio vacío (para pegar ahí)
+  let alignTarget = 'sel';      // 'sel' = entre sí · 'page' = a la pieza
+
+  const isMulti = () => SEL.length > 1;
+  const uniq = a => [...new Set(a)];
+  const pieceOf = el => el && el.closest ? el.closest('.piece') : null;
+  const parentDrag = el => el.parentElement && el.parentElement.closest('.drag');
+  const selList = () => (isMulti() ? SEL.slice() : (selected ? [selected] : []));
+
+  /* ---------- Grupos ---------- */
+  function groupMembers(el) {
+    const g = el.dataset.group;
+    const piece = pieceOf(el);
+    if (!g || !piece) return [el];
+    const l = [...piece.querySelectorAll('.drag')].filter(d => d.dataset.group === g);
+    return l.length > 1 ? l : [el];
+  }
+  const expand = list => uniq(list.flatMap(groupMembers));
+  function rootsOf(list) {                       // sin los elementos que ya viajan dentro de otro seleccionado
+    return list.filter(e => { let p = parentDrag(e); while (p) { if (list.includes(p)) return false; p = parentDrag(p); } return true; });
+  }
+  function isExactGroup(roots) {
+    if (roots.length < 2) return false;
+    const g = roots[0].dataset.group;
+    return !!g && roots.every(r => r.dataset.group === g) && groupMembers(roots[0]).length === roots.length;
+  }
+  function normalizeGroups(piece) {              // un grupo de 1 solo miembro deja de existir
+    const n = {};
+    piece.querySelectorAll('.drag').forEach(d => { if (d.dataset.group) n[d.dataset.group] = (n[d.dataset.group] || 0) + 1; });
+    piece.querySelectorAll('.drag').forEach(d => { if (d.dataset.group && n[d.dataset.group] < 2) delete d.dataset.group; });
+  }
+  const newGid = () => 'grp_' + rid(8);
+
+  function unionRect(list) {
+    let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
+    list.forEach(el => { const r = rectIn(el); x0 = Math.min(x0, r.x); y0 = Math.min(y0, r.y); x1 = Math.max(x1, r.x + r.w); y1 = Math.max(y1, r.y + r.h); });
+    return { x: x0, y: y0, w: x1 - x0, h: y1 - y0 };
+  }
+
+  /* ---------- Selección ---------- */
+  function clearMulti() { SEL.forEach(e => e.classList.remove('selected')); SEL = []; }
+
+  function setSel(list) {
+    list = uniq((list || []).filter(e => e && e.isConnected));
+    force = true;
+    try {
+      clearMulti();
+      if (list.length < 2) { select(list[0] || null); return; }
+      SEL = list;
+      select(null);                              // limpia el elemento único y refresca paneles
+    } finally { force = false; }
+    list.forEach(e => e.classList.add('selected'));
+    updateBox();
+  }
+
+  /* select(): un elemento de un grupo selecciona todo el grupo; un clic sobre un grupo ya seleccionado
+     (o dentro de uno ya "abierto") selecciona solo ese elemento */
+  select = function (el) {
+    if (force) return _select.apply(this, arguments);
+    const was = SEL.slice();
+    if (was.length) clearMulti();
+    if (el) {
+      const g = groupMembers(el);
+      const inside = !!(selected && selected.dataset.group && selected.dataset.group === el.dataset.group);
+      const narrow = was.length > 1 && was.includes(el) && g.length === was.length && g.every(x => was.includes(x));
+      if (g.length > 1 && !inside && !narrow) { setSel(g); return; }
+    }
+    return _select.apply(this, arguments);
+  };
+
+  function toggle(el) {
+    const piece = pieceOf(el);
+    const g = groupMembers(el);
+    if (g.length === 1 && isLocked(el)) return;                 // los bloqueados no se suman sueltos
+    const cur = selList().filter(x => pieceOf(x) === piece);
+    const has = g.every(x => cur.includes(x));
+    setSel(has ? cur.filter(x => !g.includes(x)) : cur.concat(g.filter(x => !cur.includes(x))));
+  }
+
+  function selectAll() {
+    const piece = activePiece();
+    if (!piece) return;
+    setSel(topLevel(piece).filter(e => !isLocked(e)));
+  }
+
+  function setMode(on) {
+    multiMode = !!on;
+    document.body.classList.toggle('ms-mode', multiMode);
+    refreshAll();
+    if (multiMode) toast('Modo varios: tocá elementos para sumarlos o quitarlos');
+    else hideToast();
+  }
+
+  /* ---------- Caja de selección (tiradores) ---------- */
+  const DOTS = '<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="5" cy="12" r="2"/><circle cx="12" cy="12" r="2"/><circle cx="19" cy="12" r="2"/></svg>';
+  updateBox = function () {
+    _updateBox.apply(this, arguments);
+    document.querySelectorAll('.piece').forEach(piece => {
+      piece.classList.toggle('multi-mode', multiMode);
+      const box = ensureBox(piece);
+      let more = box.querySelector('.rs-more');
+      if (!more) {
+        more = document.createElement('div');
+        more.className = 'rs-more';
+        more.title = 'Más opciones';
+        more.setAttribute('aria-label', 'Más opciones');
+        more.innerHTML = DOTS;
+        box.appendChild(more);
+      }
+      const multi = isMulti() && piece.contains(SEL[0]);
+      const one = !multi && selected && piece.contains(selected) ? selected : null;
+      box.classList.remove('is-multi', 'is-locked');
+      if (!multi && !one) return;                                // la caja ya quedó oculta
+      const list = multi ? rootsOf(SEL) : [one], locked = list.some(isLocked);
+      if (multi) {
+        piece.classList.toggle('has-sel', !locked);
+        box.classList.remove('is-photo');
+        box.classList.toggle('is-multi', !locked);
+      }
+      box.classList.toggle('is-locked', locked);                // bloqueado: sin tiradores, pero con el menú ⋯
+      box.classList.add('on');
+      const r = multi ? unionRect(list) : rectIn(one);
+      Object.assign(box.style, { left: r.x + 'px', top: r.y + 'px', width: r.w + 'px', height: r.h + 'px' });
+      const mv = box.querySelector('.rs-mv');
+      if (mv) {
+        const cs = getComputedStyle(mv), inv = parseFloat(piece.style.getPropertyValue('--inv')) || 1;
+        const need = (parseFloat(cs.getPropertyValue('--mv')) + parseFloat(cs.getPropertyValue('--gap'))) * inv;
+        const fitsTop = r.y - need >= 0, fitsBottom = r.y + r.h + need <= piece.offsetHeight;
+        [mv, more].forEach(n => { n.classList.toggle('below', !fitsTop && fitsBottom); n.classList.toggle('inside', !fitsTop && !fitsBottom); });
+      }
+    });
+  };
+
+  busyInteracting = function () { return !!(mdrag || mres || mq) || _busy.apply(this, arguments); };
+
+  /* ---------- Mover en bloque ---------- */
+  function snapTargetsMulti(piece, roots) {
+    const W = piece.offsetWidth, H = piece.offsetHeight;
+    const t = [{ x: 0, y: 0, w: W, h: H }];
+    const g = piece.querySelector('.guide');
+    if (g) {
+      const l = parseFloat(g.style.left) || 0, tp = parseFloat(g.style.top) || 0, r = parseFloat(g.style.right) || 0, b = parseFloat(g.style.bottom) || 0;
+      t.push({ x: l, y: tp, w: W - l - r, h: H - tp - b, edges: true });
+    }
+    piece.querySelectorAll('.drag').forEach(o => {
+      if (roots.some(r => r === o || r.contains(o))) return;
+      const r = rectIn(o);
+      if (r.w > 1 && r.h > 1) t.push(r);
+    });
+    return t;
+  }
+
+  function startMDrag(e, narrowEl) {
+    const roots = rootsOf(SEL), piece = pieceOf(roots[0]);
+    const locked = roots.some(isLocked);
+    mdrag = {
+      piece, s: scaleOf(piece), sx: e.clientX, sy: e.clientY, moved: false, narrowEl, hasGuides: false,
+      items: locked ? [] : roots.map(el => ({ el, bx: parseFloat(el.dataset.dx) || 0, by: parseFloat(el.dataset.dy) || 0 })),
+      r0: locked ? null : unionRect(roots),
+      targets: !locked && snapOn() ? snapTargetsMulti(piece, roots) : null
+    };
+  }
+
+  function startMRes(h, e) {
+    const roots = rootsOf(SEL), piece = pieceOf(roots[0]);
+    roots.forEach(el => { if (getComputedStyle(el).display === 'inline') el.style.display = 'block'; });
+    const R = unionRect(roots), hd = h.dataset.h;
+    const hx = hd.includes('w') ? R.x : R.x + R.w, hy = hd.includes('n') ? R.y : R.y + R.h;
+    const ax = hd.includes('w') ? R.x + R.w : R.x, ay = hd.includes('n') ? R.y + R.h : R.y;
+    const items = roots.map(el => {
+      const cs = getComputedStyle(el), r = rectIn(el);
+      return {
+        el, w0: el.offsetWidth, h0: el.offsetHeight,
+        dx0: parseFloat(el.dataset.dx) || 0, dy0: parseFloat(el.dataset.dy) || 0,
+        cx: r.x + r.w / 2, cy: r.y + r.h / 2,
+        fs0: parseFloat(cs.fontSize) || 0, hasFs: !!el.dataset.f,
+        both: el.classList.contains('photo') || !!el.style.height,
+        pad0: el.style.padding ? parseFloat(el.style.padding) : null
+      };
+    });
+    const minW = Math.max(1, Math.min(...items.map(i => i.w0)));
+    mres = { piece, s: scaleOf(piece), items, ax, ay, hx, hy, sx: e.clientX, sy: e.clientY, kmin: Math.max(0.08, Math.min(1, 16 / minW)) };
+  }
+
+  /* ---------- Rectángulo de selección ---------- */
+  function layerOf(piece) {
+    let L = piece.querySelector('.snap-layer');
+    if (!L) { L = document.createElement('div'); L.className = 'snap-layer'; piece.appendChild(L); }
+    return L;
+  }
+  function startMarquee(e, piece, additive) {
+    const s = scaleOf(piece), pr = piece.getBoundingClientRect();
+    mq = { piece, s, x0: (e.clientX - pr.left) / s, y0: (e.clientY - pr.top) / s, sx: e.clientX, sy: e.clientY, add: additive,
+           base: additive ? selList().filter(x => piece.contains(x)) : [], node: null, moved: false, list: null };
+    if (!additive && (selected || SEL.length)) select(null);
+  }
+  function endMarquee(commit) {
+    const m = mq; mq = null;
+    if (!m) return;
+    if (m.node) m.node.remove();
+    if (m.moved && commit) setSel(m.list || []);
+    else if (m.moved) { m.piece.querySelectorAll('.drag.selected').forEach(d => d.classList.remove('selected')); setSel(m.base); }
+  }
+
+  /* ---------- Puntero ---------- */
+  document.addEventListener('pointerdown', e => {
+    if (e.pointerType === 'touch' && !e.isPrimary) return;       // segundo dedo: pellizco
+    if (gesture || imageMode) return;
+    const t = e.target;
+    if (!t || !t.closest) return;
+    const piece = t.closest('.piece');
+    if (!piece || t.closest('.editing')) return;
+    lastPtr = e.pointerType || 'mouse';
+    if (t.closest('.rs-more')) {                                 // botón ⋯: se abre al soltar
+      e.stopPropagation(); e.preventDefault();
+      moreTap = { id: e.pointerId };
+      return;
+    }
+    if (t.closest('.rs-h')) {                                    // tiradores: escalar el conjunto
+      if (!isMulti() || e.button > 0) return;
+      e.stopPropagation(); e.preventDefault();
+      if (!rootsOf(SEL).some(isLocked)) startMRes(t.closest('.rs-h'), e);
+      return;
+    }
+    if (t.closest('.rs-mv')) {                                   // ícono de mover
+      if (!isMulti() || e.button > 0) return;
+      e.stopPropagation(); e.preventDefault();
+      startMDrag(e, null);
+      return;
+    }
+    const el = t.closest('.drag');
+    const mod = e.shiftKey || e.ctrlKey || e.metaKey;
+    if (e.button === 2) { if (el && SEL.includes(el)) e.stopPropagation(); return; }   // clic derecho: conserva la selección
+    if (e.button > 0) return;
+
+    if (multiMode) {                                             // modo "Varios": toque = sumar / quitar; arrastre = mover o rectángulo
+      e.stopPropagation(); e.preventDefault();
+      if (el) {
+        mtap = { el, id: e.pointerId, x: e.clientX, y: e.clientY };
+        if (SEL.includes(el)) startMDrag(e, null);
+      } else startMarquee(e, piece, true);
+      return;
+    }
+    if (el) {
+      if (mod) { e.stopPropagation(); e.preventDefault(); toggle(el); return; }
+      if (SEL.includes(el)) { e.stopPropagation(); e.preventDefault(); startMDrag(e, el); return; }
+      const g = groupMembers(el);
+      const inside = !!(selected && selected.dataset.group && selected.dataset.group === el.dataset.group);
+      if (g.length > 1 && !inside) { e.stopPropagation(); e.preventDefault(); setSel(g); startMDrag(e, null); }
+      return;                                                    // el resto lo maneja el arrastre de un solo elemento
+    }
+    if (e.pointerType === 'touch') return;                       // táctil sin modo Varios: el toque en vacío solo deselecciona
+    e.stopPropagation(); e.preventDefault();
+    startMarquee(e, piece, mod);
+  }, true);                                                      // en captura: va antes que el arrastre de un solo elemento
+
+  document.addEventListener('pointermove', e => {
+    if (gesture) {                                               // pellizco con dos dedos: se cancela lo que estaba en curso
+      if (mdrag || mres || mq || mtap) {
+        const d = mdrag;
+        mdrag = null; mres = null; mtap = null;
+        if (d) clearGuides(d.piece);
+        if (mq) endMarquee(false);
+        refreshAll();
+      }
+      return;
+    }
+    if (mdrag) {
+      const d = mdrag;
+      if (!d.moved && Math.hypot(e.clientX - d.sx, e.clientY - d.sy) < 4) return;
+      d.moved = true;
+      if (!d.items.length) return;
+      let dx = (e.clientX - d.sx) / d.s, dy = (e.clientY - d.sy) / d.s;
+      if (d.targets && !e.altKey) {
+        const m = { x: d.r0.x + dx, y: d.r0.y + dy, w: d.r0.w, h: d.r0.h };
+        const res = snapRect(m, d.targets, (isTouch() ? SNAP_TOUCH : SNAP_FINE) / d.s);
+        dx += res.sx; dy += res.sy;
+        drawGuides(d.piece, res.guides);
+        const has = res.guides.x.length + res.guides.y.length > 0;
+        if (has && !d.hasGuides && navigator.vibrate) navigator.vibrate(6);
+        d.hasGuides = has;
+      } else clearGuides(d.piece);
+      d.items.forEach(it => { it.el.dataset.dx = it.bx + dx; it.el.dataset.dy = it.by + dy; applyT(it.el); });
+      updateBox();
+      return;
+    }
+    if (mres) {
+      const m = mres;
+      const px = m.hx + (e.clientX - m.sx) / m.s, py = m.hy + (e.clientY - m.sy) / m.s;
+      const vx = m.hx - m.ax, vy = m.hy - m.ay, vv = vx * vx + vy * vy || 1;
+      const k = Math.min(8, Math.max(m.kmin, ((px - m.ax) * vx + (py - m.ay) * vy) / vv));
+      m.items.forEach(it => {
+        const el = it.el;
+        el.dataset.dx = it.dx0; el.dataset.dy = it.dy0; applyT(el);
+        el.style.width = Math.max(4, Math.round(it.w0 * k)) + 'px';
+        if (it.both) el.style.height = Math.max(4, Math.round(it.h0 * k)) + 'px';
+        if (it.hasFs) el.style.fontSize = r2(it.fs0 * k) + 'px';
+        if (it.pad0 != null) el.style.padding = r2(it.pad0 * k) + 'px';
+        if (el.classList.contains('photo')) applyImg(el);
+        const r = rectIn(el);
+        moveBy(el, m.ax + k * (it.cx - m.ax) - (r.x + r.w / 2), m.ay + k * (it.cy - m.ay) - (r.y + r.h / 2));
+      });
+      updateBox();
+      return;
+    }
+    if (mq) {
+      const m = mq;
+      if (!m.moved && Math.hypot(e.clientX - m.sx, e.clientY - m.sy) < 4) return;
+      m.moved = true;
+      const pr = m.piece.getBoundingClientRect();
+      const x1 = (e.clientX - pr.left) / m.s, y1 = (e.clientY - pr.top) / m.s;
+      const R = { x: Math.min(m.x0, x1), y: Math.min(m.y0, y1), w: Math.abs(x1 - m.x0), h: Math.abs(y1 - m.y0) };
+      if (!m.node) { m.node = document.createElement('div'); m.node.className = 'ms-marquee'; layerOf(m.piece).appendChild(m.node); }
+      Object.assign(m.node.style, { left: R.x + 'px', top: R.y + 'px', width: R.w + 'px', height: R.h + 'px' });
+      const hits = expand(topLevel(m.piece).filter(el => {
+        if (isLocked(el) && !el.dataset.group) return false;
+        const r = rectIn(el);
+        return r.x < R.x + R.w && r.x + r.w > R.x && r.y < R.y + R.h && r.y + r.h > R.y;
+      }));
+      m.list = uniq(m.base.concat(hits));
+      m.piece.querySelectorAll('.drag.selected').forEach(d => { if (!m.list.includes(d)) d.classList.remove('selected'); });
+      m.list.forEach(d => d.classList.add('selected'));
+    }
+  });
+
+  function finish(e, cancelled) {
+    if (mdrag) {
+      const d = mdrag; mdrag = null;
+      clearGuides(d.piece);
+      if (!cancelled && !d.moved && d.narrowEl) setSel([d.narrowEl]);   // clic sin arrastrar sobre un elemento ya seleccionado
+      else refreshAll();
+    }
+    if (mres) { mres = null; refreshAll(); }
+    if (mq) endMarquee(!cancelled);
+    if (moreTap && e && e.pointerId === moreTap.id) {
+      moreTap = null;
+      const m = e.target && e.target.closest && e.target.closest('.rs-more');
+      if (!cancelled && m) {
+        if (ctxMenu.classList.contains('open')) ctxMenu.classList.remove('open');
+        else { const r = m.getBoundingClientRect(); ctxAt = null; openMenu(r.left, r.bottom + 6, { anchorTop: r.top }); }
+      }
+    }
+    if (mtap && e && e.pointerId === mtap.id) {
+      const tp = mtap; mtap = null;
+      if (!cancelled && Math.hypot(e.clientX - tp.x, e.clientY - tp.y) < 8 && tp.el.isConnected) toggle(tp.el);
+    }
+  }
+  document.addEventListener('pointerup', e => finish(e, false));
+  document.addEventListener('pointercancel', e => finish(e, true));
+
+  /* ---------- Acciones sobre la selección ---------- */
+  function undoToast(piece, msg) {
+    const h = HIST.get(piece), at = h ? h.idx : -1;
+    toast(msg, 'Deshacer', () => { if (h && h.idx === at) undo(piece); });
+  }
+
+  function group() {
+    const roots = rootsOf(SEL);
+    if (roots.length < 2) return;
+    const piece = pieceOf(roots[0]);
+    flushAll();
+    const gid = newGid();
+    roots.forEach(el => { el.dataset.group = gid; });
+    normalizeGroups(piece);
+    setSel(roots);
+    commitNow(piece);
+    undoToast(piece, 'Grupo creado (' + roots.length + ' elementos)');
+  }
+
+  function ungroup() {
+    const roots = rootsOf(SEL);
+    if (!roots.some(r => r.dataset.group)) return;
+    const piece = pieceOf(roots[0]);
+    flushAll();
+    roots.forEach(el => { delete el.dataset.group; });
+    normalizeGroups(piece);
+    setSel(roots);
+    commitNow(piece);
+    undoToast(piece, 'Grupo deshecho');
+  }
+
+  function dupMany() {
+    const roots = rootsOf(selList()).filter(r => !r.classList.contains('pc-sticker')).sort((a, b) => zOf(a) - zOf(b));
+    if (!roots.length) return;
+    flushAll();
+    const map = {}, clones = [], was = force;
+    force = true;
+    try {
+      roots.forEach(el => {
+        duplicateEl(el);
+        const c = selected;
+        if (!c) return;
+        if (el.dataset.group) { map[el.dataset.group] = map[el.dataset.group] || newGid(); c.dataset.group = map[el.dataset.group]; }
+        clones.push(c);
+      });
+    } finally { force = was; }
+    setSel(clones);
+  }
+
+  function lockMany() {
+    const roots = rootsOf(selList()), any = roots.some(isLocked);
+    flushAll();
+    roots.forEach(el => { el.dataset.locked = any ? '0' : '1'; });
+    refreshAll();
+  }
+
+  function delMany() {
+    const roots = rootsOf(selList());
+    if (!roots.length || roots.some(isLocked)) return;
+    const piece = pieceOf(roots[0]);
+    flushAll();
+    roots.forEach(el => el.remove());
+    normalizeGroups(piece);
+    setSel([]);
+    commitNow(piece);
+    undoToast(piece, roots.length + ' elementos eliminados');
+  }
+
+  function orderMany(op) {
+    const roots = rootsOf(selList());
+    if (!roots.length) return;
+    const piece = pieceOf(roots[0]), all = topLevel(piece);
+    const set = new Set(roots.filter(r => all.includes(r)));
+    if (!set.size) return;
+    flushAll();
+    let list = all.slice();
+    if (op === 'front') list = list.filter(x => !set.has(x)).concat(list.filter(x => set.has(x)));
+    else if (op === 'back') list = list.filter(x => set.has(x)).concat(list.filter(x => !set.has(x)));
+    else if (op === 'up') { for (let i = list.length - 2; i >= 0; i--) if (set.has(list[i]) && !set.has(list[i + 1])) [list[i], list[i + 1]] = [list[i + 1], list[i]]; }
+    else if (op === 'down') { for (let i = 1; i < list.length; i++) if (set.has(list[i]) && !set.has(list[i - 1])) [list[i], list[i - 1]] = [list[i - 1], list[i]]; }
+    const zs = all.map(zOf).sort((a, b) => a - b);
+    for (let i = 1; i < zs.length; i++) if (zs[i] <= zs[i - 1]) zs[i] = zs[i - 1] + 10;
+    list.forEach((el, i) => { el.style.zIndex = zs[i]; });
+    refreshAll();
+  }
+
+  function align(mode) {
+    const roots = rootsOf(SEL);
+    if (roots.length < 2 || roots.some(isLocked)) return;
+    const piece = pieceOf(roots[0]);
+    flushAll();
+    const U = unionRect(roots);
+    if (alignTarget === 'page') {
+      const W = piece.offsetWidth, H = piece.offsetHeight;
+      let dx = 0, dy = 0;
+      if (mode === 'left') dx = -U.x; else if (mode === 'hcenter') dx = (W - U.w) / 2 - U.x; else if (mode === 'right') dx = W - U.w - U.x;
+      else if (mode === 'top') dy = -U.y; else if (mode === 'vcenter') dy = (H - U.h) / 2 - U.y; else if (mode === 'bottom') dy = H - U.h - U.y;
+      roots.forEach(el => moveBy(el, dx, dy));
+    } else {
+      roots.map(el => ({ el, r: rectIn(el) })).forEach(({ el, r }) => {
+        let dx = 0, dy = 0;
+        if (mode === 'left') dx = U.x - r.x; else if (mode === 'hcenter') dx = U.x + U.w / 2 - (r.x + r.w / 2); else if (mode === 'right') dx = U.x + U.w - (r.x + r.w);
+        else if (mode === 'top') dy = U.y - r.y; else if (mode === 'vcenter') dy = U.y + U.h / 2 - (r.y + r.h / 2); else if (mode === 'bottom') dy = U.y + U.h - (r.y + r.h);
+        moveBy(el, dx, dy);
+      });
+    }
+    refreshAll();
+  }
+
+  function distribute(axis) {
+    const roots = rootsOf(SEL);
+    if (roots.some(isLocked)) return;
+    if (roots.length < 3) { toast('Elegí 3 o más elementos para distribuir'); return; }
+    flushAll();
+    const H = axis === 'h';
+    const rs = roots.map(el => ({ el, r: rectIn(el) })).sort((a, b) => H ? a.r.x - b.r.x : a.r.y - b.r.y);
+    const first = rs[0].r, last = rs[rs.length - 1].r;
+    const total = H ? last.x + last.w - first.x : last.y + last.h - first.y;
+    const sum = rs.reduce((s, o) => s + (H ? o.r.w : o.r.h), 0);
+    const gap = (total - sum) / (rs.length - 1);
+    let pos = (H ? first.x + first.w : first.y + first.h) + gap;
+    for (let i = 1; i < rs.length - 1; i++) {
+      const { el, r } = rs[i];
+      if (H) moveBy(el, pos - r.x, 0); else moveBy(el, 0, pos - r.y);
+      pos += (H ? r.w : r.h) + gap;
+    }
+    refreshAll();
+  }
+
+  /* ---------- Copiar y pegar (entre páginas) ----------
+     El portapapeles guarda una copia del HTML de cada elemento, su caja y su tamaño de letra, no referencias al
+     DOM: sigue valiendo aunque cambies de página (la pieza se reemplaza por la de esa página). Las fotos
+     comparten las imágenes del proyecto (IMGS), así que no se duplican datos. */
+  function copySel() {
+    const roots = rootsOf(selList()).sort((a, b) => zOf(a) - zOf(b));
+    if (!roots.length) return;
+    const piece = pieceOf(roots[0]);
+    CLIP = {
+      from: CURPG ? CURPG.uid : null, n: 0,
+      items: roots.map(el => {
+        const r = rectIn(el), c = el.cloneNode(true);
+        [c, ...c.querySelectorAll('.drag')].forEach(n => { n.classList.remove('selected', 'editing'); n.removeAttribute('contenteditable'); n.removeAttribute('id'); });
+        c.querySelectorAll('.ph-img').forEach(n => n.style.removeProperty('background-image'));
+        return {
+          html: c.outerHTML, w: el.offsetWidth, h: el.offsetHeight, cx: r.x + r.w / 2, cy: r.y + r.h / 2,
+          fixedH: el.classList.contains('photo') || !!el.style.height,
+          fs: el.dataset.f ? getComputedStyle(el).fontSize : null,
+          gid: el.dataset.group || null
+        };
+      })
+    };
+    refreshAll();
+  }
+
+  function pasteClip(at) {
+    if (!CLIP || !CLIP.items.length) return;
+    const piece = activePiece();
+    if (!piece) return;
+    flushAll();
+    const W = piece.offsetWidth, H = piece.offsetHeight;
+    const same = !!(CLIP.from && CURPG && CLIP.from === CURPG.uid);
+    let ox = 24 * (CLIP.n + (same ? 1 : 0)), oy = ox;             // en la misma página se corre un poco; en otra, cae en el mismo lugar
+    if (at) {
+      let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
+      CLIP.items.forEach(i => { x0 = Math.min(x0, i.cx - i.w / 2); x1 = Math.max(x1, i.cx + i.w / 2); y0 = Math.min(y0, i.cy - i.h / 2); y1 = Math.max(y1, i.cy + i.h / 2); });
+      ox = at.x - (x0 + x1) / 2; oy = at.y - (y0 + y1) / 2;
+    }
+    const tmp = document.createElement('div'), map = {}, made = [];
+    CLIP.items.forEach(it => {
+      tmp.innerHTML = it.html;
+      const el = tmp.firstElementChild;
+      el.classList.add('drag');
+      el.dataset.dx = 0; el.dataset.dy = 0;
+      el.dataset.locked = '0'; el.dataset.origin = 'user'; el.dataset.uid = newUid();
+      el.querySelectorAll('.drag').forEach(n => { n.dataset.uid = newUid(); n.dataset.origin = 'user'; });
+      if (it.gid) { map[it.gid] = map[it.gid] || newGid(); el.dataset.group = map[it.gid]; } else delete el.dataset.group;
+      el.style.position = 'absolute';
+      el.style.bottom = 'auto';
+      el.style.width = it.w + 'px';
+      if (it.fixedH) el.style.height = it.h + 'px';
+      if (it.fs && !el.style.fontSize) el.style.fontSize = it.fs;   // conserva el tamaño aunque la otra pieza use otro formato
+      const cx = Math.min(W, Math.max(0, it.cx + ox)), cy = Math.min(H, Math.max(0, it.cy + oy));
+      el.style.left = (cx - it.w / 2) + 'px';
+      el.style.top = (cy - it.h / 2) + 'px';
+      el.style.zIndex = nextZ(piece);
+      applyT(el);
+      piece.appendChild(el);
+      el.querySelectorAll('.ph-img[data-src-id]').forEach(n => { const u = IMGS[n.dataset.srcId]; if (u) n.style.backgroundImage = 'url("' + u + '")'; });
+      made.push(el);
+    });
+    CLIP.n++;
+    normalizeGroups(piece);
+    refreshPhotos();
+    setSel(made);
+    commitNow(piece);
+  }
+
+  function act(name) {
+    switch (name) {
+      case 'group': return group();
+      case 'ungroup': return ungroup();
+      case 'dup': return dupMany();
+      case 'lock': return lockMany();
+      case 'del': return delMany();
+      case 'front': case 'back': case 'up': case 'down': return orderMany(name);
+      case 'multi': return setMode(!multiMode);
+      case 'all': return selectAll();
+      case 'copy': return copySel();
+      case 'cut': copySel(); return delMany();
+      case 'paste': { const a = ctxAt; ctxAt = null; return pasteClip(a); }
+      case 'edit': { const et = selected && editTargetOf(selected); if (et) startEdit(et); return; }
+      case 'photo': if (selected && selected.classList.contains('photo')) pickPhoto(selected); return;
+      case 'selgroup': return selected && setSel(groupMembers(selected));
+      case 'close': multiMode = false; document.body.classList.remove('ms-mode'); select(null); return;
+    }
+  }
+
+  /* ---------- Envolturas de funciones existentes ---------- */
+  deleteEl = function (el) {
+    _deleteEl.apply(this, arguments);
+    if (SEL.length) { const rest = SEL.filter(e => e.isConnected); if (rest.length !== SEL.length) setSel(rest); }
+  };
+
+  duplicateEl = function (el) {                  // un duplicado suelto nunca queda dentro del grupo del original
+    const was = force;
+    force = true;
+    try { _duplicateEl.apply(this, arguments); } finally { force = was; }
+    if (selected && selected !== el) delete selected.dataset.group;
+  };
+
+  restore = function (piece, snap) {             // deshacer/rehacer reemplaza el DOM: se vuelve a seleccionar por uid
+    const uids = isMulti() && piece.contains(SEL[0]) ? SEL.map(e => e.dataset.uid) : [];
+    clearMulti();
+    _restore.apply(this, arguments);
+    if (uids.length > 1) {
+      const els = uids.map(u => piece.querySelector('[data-uid="' + u + '"]')).filter(Boolean);
+      if (els.length > 1) setSel(els);
+    }
+  };
+
+  renderList = function (card) {                 // Capas: marca todos los seleccionados y muestra la etiqueta de grupo
+    _renderList.apply(this, arguments);
+    const list = card.querySelector('.el-list'), piece = card.querySelector('.piece');
+    if (!list || !piece) return;
+    const sel = new Set(selList()), order = [];
+    piece.querySelectorAll('.drag').forEach(d => { const g = d.dataset.group; if (g && !order.includes(g) && groupMembers(d).length > 1) order.push(g); });
+    list.querySelectorAll('.el-row').forEach(row => {
+      const el = row._el;
+      if (!el) return;
+      row.classList.toggle('on', sel.has(el));
+      const g = el.dataset.group, i = g ? order.indexOf(g) : -1;
+      if (i < 0) return;
+      const chip = document.createElement('span');
+      chip.className = 'ms-chip';
+      chip.textContent = 'G' + (i + 1);
+      chip.title = 'Grupo ' + (i + 1) + ' · ' + groupMembers(el).length + ' elementos';
+      chip.style.setProperty('--gh', (i * 67) % 360);
+      const nm = row.querySelector('.nm');
+      nm.parentNode.insertBefore(chip, nm);
+    });
+  };
+
+  /* Capas: Mayús / Ctrl / Cmd + clic (o modo Varios) suma o quita elementos */
+  document.addEventListener('click', e => {
+    const nm = e.target.closest && e.target.closest('.el-row .nm');
+    if (!nm) return;
+    const row = nm.closest('.el-row'), el = row && row._el;
+    if (!el || !(e.shiftKey || e.ctrlKey || e.metaKey || multiMode)) return;
+    e.stopPropagation();
+    toggle(el);
+  }, true);
+
+  /* ---------- Menú de opciones (botón ⋯ y clic derecho) ---------- */
+  function openMenu(x, y, o) {
+    o = o || {};
+    const roots = rootsOf(selList()), empty = !!o.empty || !roots.length, clip = !!CLIP;
+    const multiLbl = multiMode ? 'Salir de selección múltiple' : 'Seleccionar varios';
+    let rows;
+    if (empty) rows = [['paste', 'Pegar', !clip], ['all', 'Seleccionar todo'], ['multi', multiLbl]];
+    else {
+      const lk = roots.some(isLocked), one = roots.length === 1 ? roots[0] : null;
+      const sticker = !!one && one.classList.contains('pc-sticker'), nested = !!one && !!parentDrag(one);
+      const anyG = roots.some(r => r.dataset.group), exact = isExactGroup(roots);
+      rows = [];
+      if (one && editTargetOf(one)) rows.push(['edit', 'Editar texto', lk]);
+      if (one && one.classList.contains('photo')) rows.push(['photo', 'Cambiar foto', lk]);
+      if (rows.length) rows.push('-');
+      rows.push(['copy', 'Copiar'], ['cut', 'Cortar', lk], ['paste', 'Pegar', !clip], ['dup', 'Duplicar', sticker]);
+      rows.push('-', ['multi', multiLbl], ['all', 'Seleccionar todo']);
+      if (one && one.dataset.group && groupMembers(one).length > 1) rows.push(['selgroup', 'Seleccionar grupo']);
+      if (!one && !exact) rows.push(['group', 'Agrupar']);
+      if (!one && anyG) rows.push(['ungroup', 'Desagrupar']);
+      rows.push('-', ['lock', lk ? 'Desbloquear' : 'Bloquear']);
+      rows.push('-', ['front', 'Traer al frente', nested], ['up', 'Subir un nivel', nested], ['down', 'Bajar un nivel', nested], ['back', 'Enviar al fondo', nested]);
+      rows.push('-', ['del', 'Eliminar', lk]);
+    }
+    ctxMenu.innerHTML = rows.map(r => r === '-' ? '<hr>' : '<button data-m="' + r[0] + '"' + (r[2] ? ' disabled' : '') + '>' + r[1] + '</button>').join('');
+    menuAt = Date.now();
+    ctxMenu.style.maxHeight = '';
+    ctxMenu.classList.add('open');
+    const mw = ctxMenu.offsetWidth, vh = window.innerHeight;
+    let mh = ctxMenu.offsetHeight, top = y;
+    if (o.anchorTop != null) {                                   // desde el botón ⋯: el menú nunca tapa el botón
+      const below = vh - y - 8, above = o.anchorTop - 6 - 8;
+      if (mh <= below) top = y;
+      else if (mh <= above) top = o.anchorTop - 6 - mh;
+      else {                                                     // no cabe entero: se usa el lado con más espacio y se desplaza
+        const useBelow = below >= above, room = Math.max(120, useBelow ? below : above);
+        ctxMenu.style.maxHeight = room + 'px';
+        mh = ctxMenu.offsetHeight;
+        top = useBelow ? y : o.anchorTop - 6 - mh;
+      }
+    } else if (top + mh > vh - 8) top = Math.max(8, vh - mh - 8);
+    ctxMenu.style.left = Math.max(8, Math.min(x, window.innerWidth - mw - 8)) + 'px';
+    ctxMenu.style.top = Math.max(8, top) + 'px';
+  }
+  openCtx = function (el, x, y) { select(el); ctxAt = null; openMenu(x, y); };
+
+  document.addEventListener('contextmenu', e => {
+    const piece = e.target.closest && e.target.closest('.piece');
+    if (!piece || lastPtr === 'touch') return;
+    const el = e.target.closest('.drag');
+    e.preventDefault(); e.stopPropagation();
+    if (!el) {
+      if (e.target.closest('.rs-box') && selList().length) { ctxAt = null; openMenu(e.clientX, e.clientY); return; }
+      const pr = piece.getBoundingClientRect(), s = scaleOf(piece);
+      ctxAt = { x: (e.clientX - pr.left) / s, y: (e.clientY - pr.top) / s };
+      openMenu(e.clientX, e.clientY, { empty: true });
+      return;
+    }
+    if (!(isMulti() && SEL.includes(el))) select(el);
+    ctxAt = null;
+    openMenu(e.clientX, e.clientY);
+  }, true);
+  ctxMenu.addEventListener('click', e => {
+    const b = e.target.closest('button[data-m]');
+    if (!b) return;
+    e.stopPropagation(); e.preventDefault();
+    if (Date.now() - menuAt < 450) return;                       // clic fantasma del toque que abrió el menú: se ignora
+    ctxMenu.classList.remove('open');
+    act(b.dataset.m);
+  }, true);
+
+  /* ---------- Teclado ---------- */
+  document.addEventListener('keydown', e => {
+    const t = e.target;
+    if (t.closest && t.closest('input, textarea, select, [contenteditable="true"]')) return;
+    const mod = e.ctrlKey || e.metaKey, k = (e.key || '').toLowerCase();
+    if (mod && k === 'a') { if (activePiece()) { e.preventDefault(); selectAll(); } return; }
+    if (mod && k === 'c') { if (selList().length) { e.preventDefault(); copySel(); } return; }
+    if (mod && k === 'x') { if (selList().length) { e.preventDefault(); copySel(); delMany(); } return; }
+    if (mod && k === 'v') { if (CLIP) { e.preventDefault(); pasteClip(null); } return; }
+    if (e.key === 'Escape' && multiMode && !isMulti()) { act('close'); return; }
+    if (!isMulti()) return;
+    if (mod && k === 'g') { e.preventDefault(); act(e.shiftKey ? 'ungroup' : 'group'); return; }
+    if (e.key === 'Escape') { act('close'); return; }
+    if (mod && k === 'd') { e.preventDefault(); act('dup'); return; }
+    if (e.key === 'Delete' || e.key === 'Backspace') { e.preventDefault(); act('del'); return; }
+    if (e.key.startsWith('Arrow')) {
+      const roots = rootsOf(SEL);
+      if (roots.some(isLocked)) return;
+      e.preventDefault();
+      const step = e.shiftKey ? 10 : 1;
+      const d = { ArrowLeft: [-step, 0], ArrowRight: [step, 0], ArrowUp: [0, -step], ArrowDown: [0, step] }[e.key];
+      if (d) { roots.forEach(el => moveBy(el, d[0], d[1])); refreshAll(); }
+    }
+  });
+
+  /* ---------- Paneles y contexto de la barra inferior ---------- */
+  const AL = {
+    left: '<path d="M4 4v16"/><rect x="7" y="7" width="12" height="4" rx="1"/><rect x="7" y="13" width="8" height="4" rx="1"/>',
+    hcenter: '<path d="M12 4v16"/><rect x="5" y="7" width="14" height="4" rx="1"/><rect x="8" y="13" width="8" height="4" rx="1"/>',
+    right: '<path d="M20 4v16"/><rect x="5" y="7" width="12" height="4" rx="1"/><rect x="9" y="13" width="8" height="4" rx="1"/>',
+    top: '<path d="M4 4h16"/><rect x="7" y="7" width="4" height="12" rx="1"/><rect x="13" y="7" width="4" height="8" rx="1"/>',
+    vcenter: '<path d="M4 12h16"/><rect x="7" y="5" width="4" height="14" rx="1"/><rect x="13" y="8" width="4" height="8" rx="1"/>',
+    bottom: '<path d="M4 20h16"/><rect x="7" y="5" width="4" height="12" rx="1"/><rect x="13" y="9" width="4" height="8" rx="1"/>'
+  };
+  const AL_NAMES = { left: 'Izquierda', hcenter: 'Centro horizontal', right: 'Derecha', top: 'Arriba', vcenter: 'Centro vertical', bottom: 'Abajo' };
+  const svg = p => '<svg viewBox="0 0 24 24" aria-hidden="true">' + p + '</svg>';
+  const ORDER_ICON = '<path d="M12 4l8 4-8 4-8-4z"/><path d="M4 12l8 4 8-4M4 16l8 4 8-4"/>';
+
+  function alignPanel() {
+    const d = document.createElement('div');
+    d.className = 'ms-panel';
+    d.innerHTML =
+      '<div class="subtabs" role="tablist"><button type="button" data-tg="sel" class="on">Entre sí</button><button type="button" data-tg="page">A la pieza</button></div>' +
+      '<div class="seg">' + Object.keys(AL).map(k => '<button type="button" class="seg-b" data-ma="' + k + '" title="' + AL_NAMES[k] + '" aria-label="' + AL_NAMES[k] + '">' + svg(AL[k]) + '</button>').join('') + '</div>' +
+      '<div class="seg">' +
+        '<button type="button" class="seg-b has-t" data-md="h">' + svg('<path d="M4 4v16M20 4v16"/><rect x="9" y="8" width="6" height="8" rx="1"/>') + '<span class="ib-t">Distribuir horizontal</span></button>' +
+        '<button type="button" class="seg-b has-t" data-md="v">' + svg('<path d="M4 4h16M4 20h16"/><rect x="8" y="9" width="8" height="6" rx="1"/>') + '<span class="ib-t">Distribuir vertical</span></button>' +
+      '</div>';
+    d.addEventListener('click', e => {
+      const tg = e.target.closest('[data-tg]'), a = e.target.closest('[data-ma]'), s = e.target.closest('[data-md]');
+      if (tg) { alignTarget = tg.dataset.tg; d.querySelectorAll('[data-tg]').forEach(b => b.classList.toggle('on', b === tg)); }
+      else if (a) align(a.dataset.ma);
+      else if (s) distribute(s.dataset.md);
+    });
+    return d;
+  }
+
+  function orderPanel() {
+    const d = document.createElement('div');
+    d.className = 'ms-panel';
+    d.innerHTML = '<div class="seg">' + [['front', 'Al frente'], ['up', 'Adelante'], ['down', 'Atrás'], ['back', 'Al fondo']]
+      .map(([k, t]) => '<button type="button" class="seg-b has-t" data-mo="' + k + '">' + svg(ORDER_ICON) + '<span class="ib-t">' + t + '</span></button>').join('') + '</div>';
+    d.addEventListener('click', e => { const b = e.target.closest('[data-mo]'); if (b) orderMany(b.dataset.mo); });
+    return d;
+  }
+
+  /* Herramientas de la barra inferior cuando hay varios elementos seleccionados */
+  const clipTools = () => ['copy'].concat(CLIP ? ['paste'] : []);
+  function ctx(piece) {
+    if (!isMulti() || !piece.contains(SEL[0])) return null;
+    const roots = rootsOf(SEL), locked = roots.some(isLocked);
+    const exact = isExactGroup(roots), anyG = roots.some(r => r.dataset.group);
+    const tools = locked ? ['close', 'lock'].concat(clipTools(), ['dup'])
+      : ['close'].concat(exact ? [] : ['group'], anyG ? ['ungroup'] : [], ['multi', 'malign', 'morder'], clipTools(), ['dup', 'lock', 'del']);
+    return {
+      sig: 'M' + roots.map(r => r.dataset.uid).join(',') + (exact ? 'e' : '') + (anyG ? 'g' : '') + (locked ? 'L' : '') + (multiMode ? '~' : '') + (CLIP ? 'p' : ''),
+      tools, locked,
+      count: exact ? 'Grupo · ' + roots.length + ' elementos' : roots.length + ' elementos'
+    };
+  }
+
+  window.MS = {
+    ctx, alignPanel, orderPanel,
+    mode: () => multiMode,
+    hasClip: () => !!CLIP,
+    decorate: t => t.flatMap(x => x === 'dup' ? clipTools().concat('dup') : [x]),
+    active: () => isMulti(),
+    groupSize: el => groupMembers(el).length,
+    handle(t) {
+      if (['group', 'ungroup', 'multi', 'all', 'close', 'selgroup', 'copy', 'paste'].includes(t)) { act(t); return true; }
+      if (['dup', 'lock', 'del'].includes(t) && isMulti()) { act(t); return true; }
+      return false;
+    },
+    group, ungroup, selectAll, setSel
+  };
+})();
+</script>
 <script>
 /* Barra inferior contextual: reubica los controles existentes (mismos nodos, misma lógica) */
 (function () {
@@ -5103,7 +5956,13 @@ const FXUI = (function () {
     font: '<path d="M6 20l6-16 6 16M8.6 14h6.8M4 20h4M16 20h4"/>',
     format: '<path d="M7 5h6a3.5 3.5 0 0 1 0 7H7zM7 12h7a3.5 3.5 0 0 1 0 7H7z"/>',
     stroke: '<rect x="4" y="4" width="16" height="16" rx="5"/><rect x="9" y="9" width="6" height="6" rx="1.5"/>',
-    shadow: '<rect x="4" y="4" width="12" height="12" rx="2.5"/><path d="M8 20h9a3 3 0 0 0 3-3V8"/>'
+    shadow: '<rect x="4" y="4" width="12" height="12" rx="2.5"/><path d="M8 20h9a3 3 0 0 0 3-3V8"/>',
+    group: '<path d="M4 8V5a1 1 0 0 1 1-1h3M16 4h3a1 1 0 0 1 1 1v3M20 16v3a1 1 0 0 1-1 1h-3M8 20H5a1 1 0 0 1-1-1v-3"/><rect x="8" y="8" width="8" height="8" rx="1"/>',
+    ungroup: '<rect x="4" y="4" width="7" height="7" rx="1.5"/><rect x="13" y="13" width="7" height="7" rx="1.5"/>',
+    multi: '<rect x="4" y="4" width="10" height="10" rx="2"/><path d="M10 20h8a2 2 0 0 0 2-2v-8"/><path d="M7 9l2 2 3-4"/>',
+    all: '<rect x="4" y="4" width="16" height="16" rx="2" stroke-dasharray="3 3"/><path d="M8.5 12.5l2.5 2.5 4.5-5"/>',
+    copy: '<rect x="6" y="5" width="12" height="16" rx="2"/><path d="M9 5V4h6v1M9 11h6M9 15h4"/>',
+    paste: '<rect x="6" y="5" width="12" height="16" rx="2"/><path d="M9 5V4h6v1M12 10v6M9.5 13.5L12 16l2.5-2.5"/>'
   };
   const svg = n => '<svg viewBox="0 0 24 24" aria-hidden="true">' + IC[n] + '</svg>';
   /* id: [etiqueta, icono, tipo]  (p = abre panel, a = acción) */
@@ -5112,7 +5971,9 @@ const FXUI = (function () {
     size: ['Tamaño', 'size', 'p'], color: ['Color', 'color', 'p'], bg: ['Fondo', 'bg', 'p'], stroke: ['Trazo', 'stroke', 'p'], shadow: ['Sombra', 'shadow', 'p'], align: ['Alinear', 'align', 'p'],
     spacing: ['Espaciado', 'spacing', 'p'], order: ['Orden', 'order', 'p'], arrange: ['Posición', 'arrange', 'p'], zoom: ['Zoom', 'zoom', 'p'],
     edit: ['Editar', 'edit', 'a'], swap: ['Cambiar', 'photo', 'a'], dup: ['Duplicar', 'dup', 'a'],
-    lock: ['Bloquear', 'lock', 'a'], del: ['Eliminar', 'del', 'a'], close: ['Listo', 'close', 'a']
+    lock: ['Bloquear', 'lock', 'a'], del: ['Eliminar', 'del', 'a'], close: ['Listo', 'close', 'a'],
+    group: ['Agrupar', 'group', 'a'], ungroup: ['Desagrupar', 'ungroup', 'a'], multi: ['Varios', 'multi', 'a'], all: ['Todo', 'all', 'a'],
+    copy: ['Copiar', 'copy', 'a'], paste: ['Pegar', 'paste', 'a'], selgroup: ['Grupo', 'group', 'a'], malign: ['Alinear', 'align', 'p'], morder: ['Orden', 'order', 'p']
   };
 
   const RATIOS = [['4x5', '4:5', 'Post clásico', '1080 × 1350', 12, 15], ['3x4', '3:4', 'Máximo espacio feed', '1080 × 1440', 12, 16],
@@ -5137,8 +5998,11 @@ const FXUI = (function () {
 
   function ctxOf(card) {
     const piece = card.querySelector('.piece');
+    const mc = window.MS && MS.ctx(piece);                       // varios elementos seleccionados
+    if (mc) return mc;
+    const md = (window.MS && MS.mode() ? '~' : '') + (window.MS && MS.hasClip() ? 'p' : '');
     const el = selected && piece.contains(selected) ? selected : null;
-    if (!el) return { sig: 'none', tools: ['add', 'pagebg', 'deco', 'layers', 'ratio'] };
+    if (!el) return { sig: 'none' + md, tools: ['add', 'pagebg', 'deco', 'layers', 'ratio'].concat(window.MS && MS.hasClip() ? ['paste'] : [], ['multi', 'all']) };
     const locked = isLocked(el), photo = el.classList.contains('photo'), st = el.classList.contains('pc-sticker'), txt = !!el.dataset.f;
     let t, k;
     if (locked) { k = 'L'; t = ['lock', 'dup']; }
@@ -5146,7 +6010,8 @@ const FXUI = (function () {
     else if (st) { k = 'S'; t = ['edit', 'color', 'bg', 'stroke', 'shadow', 'arrange', 'lock', 'del']; }
     else if (txt) { k = 'T'; t = ['edit', 'font', 'format', 'size', 'color', 'bg', 'stroke', 'align', 'spacing', 'order', 'arrange', 'dup', 'lock', 'del']; }
     else { k = 'O'; t = ['color', 'bg', 'stroke', 'shadow', 'order', 'arrange', 'dup', 'lock', 'del']; }
-    return { sig: k + (el.dataset.uid || ''), tools: ['close'].concat(t), locked };
+    const grp = !!(window.MS && el.dataset.group && MS.groupSize(el) > 1);
+    return { sig: k + (el.dataset.uid || '') + md + (grp ? 'g' : ''), tools: ['close', 'multi'].concat(grp ? ['selgroup'] : [], window.MS ? MS.decorate(t) : t), locked };
   }
 
   document.querySelectorAll('.card').forEach(card => {
@@ -5241,6 +6106,7 @@ const FXUI = (function () {
     box('zoom', [blk('.zm-r')]);
     box('pagebg', [q('.pz-p') && q('.pz-p').closest('.row')]);
     box('order', [blk('[data-ord]')]);
+    if (window.MS) { box('malign', [MS.alignPanel()]); box('morder', [MS.orderPanel()]); }
     tabbed('arrange', [
       ['Alinear', [blk('[data-al]')]],
       ['Tamaño', [fld('.w-n'), q('.ratio-r') && q('.ratio-r').closest('.chk')]],
@@ -5250,7 +6116,7 @@ const FXUI = (function () {
     box('font', [IGFont.panel('font')]); box('format', [IGFont.panel('format')]); box('layers', [blk('.el-list')]); box('ratio', [buildRatio(card, () => setTool(''))]); box('add', [blk('.add-grid')]); tabbed('deco', [['Biblioteca', [q('.lib')]], ['+ Nuevo', [], '', () => openDecoModal()]]);
 
     const st = card._dock = { sig: null, tool: '' };
-    const mark = () => bar.querySelectorAll('button[data-t]').forEach(b => b.classList.toggle('on', b.dataset.t === st.tool));
+    const mark = () => bar.querySelectorAll('button[data-t]').forEach(b => b.classList.toggle('on', b.dataset.t === st.tool || (b.dataset.t === 'multi' && !!window.MS && MS.mode())));
     const setTool = name => {
       st.tool = name;
       side.classList.toggle('dock-open', !!name);
@@ -5264,6 +6130,7 @@ const FXUI = (function () {
       const t = b.dataset.t, click = s => { const n = q(s); if (n) n.click(); };
       if (T[t][2] === 'p') return setTool(st.tool === t ? '' : t);
       setTool('');
+      if (window.MS && MS.handle(t)) return;
       if (t === 'edit') click('[data-q="edit"]');
       else if (t === 'swap') click('[data-q="photo"]');
       else if (t === 'dup') click('[data-q="dup"]');
@@ -5276,6 +6143,7 @@ const FXUI = (function () {
       if (st.sig !== c.sig) {
         st.sig = c.sig;
         bar.innerHTML = '';
+        if (c.count) { const n = document.createElement('div'); n.className = 'ms-count'; n.textContent = c.count; bar.appendChild(n); }
         c.tools.forEach(t => {
           const b = document.createElement('button');
           b.type = 'button';
