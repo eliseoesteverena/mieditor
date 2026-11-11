@@ -81,6 +81,8 @@ body { font-family: 'Inter', system-ui, sans-serif; background: var(--paper); co
 .photo-ph { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center }
 .photo-ph span { background: var(--white); border: 1.5px solid var(--ink); border-radius: var(--radius); padding: 12px 22px; font-size: 28px; font-weight: 600; color: var(--ink-soft) }
 .photo.has-img .photo-ph { display: none }
+.ph-vid { position: absolute; max-width: none; pointer-events: none }
+.pg-mini .ph-vid { display: none }
 .pc-sticker { position: absolute; left: 24px; bottom: 24px; z-index: 2; display: inline-flex; flex-direction: column; gap: 2px; background: var(--mustard); border: 1.5px solid var(--ink); border-radius: var(--radius); box-shadow: var(--shadow); padding: 12px 20px }
 .pc-sticker small { font-size: 20px; font-weight: 600; text-transform: uppercase; letter-spacing: .06em }
 .pc-sticker b { font-family: 'Fraunces', Georgia, serif; font-size: 40px; font-weight: 700; line-height: 1.1 }
@@ -751,7 +753,7 @@ window.IGFont = (function () {
     </div>
     <div class="pm-pane" data-pm="export">
       <div class="ex-field"><label for="ex-type">Tipo de archivo</label>
-        <select id="ex-type"><option value="jpg">JPG · imagen</option><option value="pdf">PDF · documento</option><option value="svg">SVG · vector (texto editable)</option></select></div>
+        <select id="ex-type"><option value="jpg">JPG · imagen</option><option value="pdf">PDF · documento</option><option value="svg">SVG · vector (texto editable)</option><option value="video">Video · MP4/WebM (página actual)</option></select></div>
       <div class="ex-field" data-ex="q"><span class="ex-l">Calidad</span>
         <div class="subtabs ex-seg" id="ex-q"><button type="button" data-v="estandar">Estándar</button><button type="button" data-v="alta">Alta</button><button type="button" data-v="maxima">Máxima</button></div></div>
       <div class="ex-field" data-ex="p"><span class="ex-l">Páginas</span>
@@ -782,7 +784,7 @@ window.IGFont = (function () {
         <span class="meta-txt">4:5 · 1080 × 1350 px · Post clásico</span>
       </div>
       <div class="card-actions">
-        <label class="btn btn-ghost btn-sm"><input type="file" accept="image/*" data-target="ph-4x5" hidden>Subir foto</label>
+        <label class="btn btn-ghost btn-sm"><input type="file" accept="image/*,video/*" data-target="ph-4x5" hidden>Subir foto o video</label>
         <button class="btn btn-sm" data-jpg="post-4x5">Descargar JPG</button>
         <button class="btn btn-sm btn-mustard" data-svg="post-4x5">Descargar SVG</button>
       </div>
@@ -965,7 +967,7 @@ function cloneForExport(id) {
   clone.style.marginLeft = '0';
   clone.style.removeProperty('--inv');
   clone.classList.remove('has-sel', 'is-editing');
-  clone.querySelectorAll('.guide, .rs-box, .snap-layer').forEach(g => g.remove());
+  clone.querySelectorAll('.guide, .rs-box, .snap-layer, .ph-vid').forEach(g => g.remove());
   clone.querySelectorAll('.drag, .editing, .selected').forEach(n => n.classList.remove('drag', 'editing', 'selected'));
   clone.querySelectorAll('[contenteditable]').forEach(n => n.removeAttribute('contenteditable'));
   return clone;
@@ -1246,6 +1248,85 @@ async function exportAll(kind) {
     setBusy(false);
   }
 }
+/* Video: la pieza se pinta una sola vez como capa transparente (textos, stickers, bordes) con los huecos de los
+   videos vacíos; cada cuadro = papel + video recortado al marco + capa. Se graba en tiempo real con MediaRecorder.
+   Límites: página actual, marcos sin rotación; los elementos que quedan DEBAJO del video se pintan encima. */
+async function exportVideo() {
+  flushAll();
+  const fmt = document.querySelector('.card').dataset.fmt, W = 1080, H = RATIO_H[fmt];
+  if (!window.MediaRecorder || !HTMLCanvasElement.prototype.captureStream) return alert('Este navegador no permite exportar video.');
+  if (!document.querySelector('.piece .photo[data-vid]')) return alert('Esta página no tiene video: subí un video a una foto primero.');
+  setBusy(true);
+  const el = pageExportEl(CURPG), vs = [];
+  let raf = 0, ac = null;
+  try {
+    await document.fonts.ready;
+    const er = el.getBoundingClientRect();
+    const items = [...el.querySelectorAll('.photo[data-vid]')].filter(p => VIDS[p.dataset.vid]).map(p => {
+      const ph = p.querySelector('.ph-img'), r = p.getBoundingClientRect(), iw = +ph.dataset.iw || r.width, ih = +ph.dataset.ih || r.height;
+      const z = Math.max(1, numOr(p.dataset.imgZ, 1)), k = Math.max(r.width / iw, r.height / ih), dw = iw * k * z, dh = ih * k * z;
+      ph.style.display = 'none'; p.style.background = 'transparent';
+      return { url: VIDS[p.dataset.vid].url, x: r.left - er.left, y: r.top - er.top, w: r.width, h: r.height, dw, dh,
+        ox: (r.width - dw) / 2 + numOr(p.dataset.imgX), oy: (r.height - dh) / 2 + numOr(p.dataset.imgY),
+        rad: parseFloat(getComputedStyle(p).borderTopLeftRadius) || 0 };
+    });
+    el.style.background = 'transparent';
+    const svg = await buildSvg(el);
+    const dataUrl = await new Promise((res, rej) => { const fr = new FileReader(); fr.onload = () => res(fr.result); fr.onerror = () => rej(fr.error); fr.readAsDataURL(new Blob([svg], { type: 'image/svg+xml;charset=utf-8' })); });
+    const img = new Image();
+    await new Promise((ok, no) => { img.onload = ok; img.onerror = () => no(new Error('no se pudo componer la capa de la pieza')); img.src = dataUrl; });
+    try { await img.decode(); } catch (_) {}
+    const layer = document.createElement('canvas'); layer.width = W; layer.height = H;
+    const lx = layer.getContext('2d');
+    lx.drawImage(img, 0, 0, W, H);
+    await new Promise(r => setTimeout(r, 150));          // deja listas las fuentes incrustadas
+    lx.clearRect(0, 0, W, H); lx.drawImage(img, 0, 0, W, H);
+
+    ac = new (window.AudioContext || window.webkitAudioContext)();
+    const dest = ac.createMediaStreamDestination();
+    for (const it of items) {
+      const v = document.createElement('video');
+      v.playsInline = true; v.preload = 'auto'; v.src = it.url;
+      await new Promise((ok, no) => { v.onloadeddata = ok; v.onerror = () => no(new Error('no se pudo leer el video')); });
+      try { ac.createMediaElementSource(v).connect(dest); } catch (_) {}
+      vs.push(v);
+    }
+    const longest = vs.reduce((a, b) => (b.duration > a.duration ? b : a));
+    vs.forEach(v => { v.loop = v !== longest; });
+    const paper = getComputedStyle(document.documentElement).getPropertyValue('--paper').trim() || '#f7f5f0';
+    const cv = document.createElement('canvas'); cv.width = W; cv.height = H;
+    const ctx = cv.getContext('2d');
+    const draw = () => {
+      ctx.fillStyle = paper; ctx.fillRect(0, 0, W, H);
+      items.forEach((it, i) => {
+        ctx.save(); ctx.beginPath(); ctx.roundRect ? ctx.roundRect(it.x, it.y, it.w, it.h, it.rad) : ctx.rect(it.x, it.y, it.w, it.h);
+        ctx.clip(); ctx.drawImage(vs[i], it.x + it.ox, it.y + it.oy, it.dw, it.dh); ctx.restore();
+      });
+      ctx.drawImage(layer, 0, 0);
+    };
+    const stream = cv.captureStream(30);
+    dest.stream.getAudioTracks().forEach(t => stream.addTrack(t));
+    const mime = ['video/mp4;codecs=avc1.42E01E,mp4a.40.2', 'video/mp4', 'video/webm;codecs=vp9,opus', 'video/webm'].find(m => MediaRecorder.isTypeSupported(m));
+    if (!mime) throw new Error('el navegador no soporta ningún formato de grabación');
+    const rec = new MediaRecorder(stream, { mimeType: mime, videoBitsPerSecond: 8e6 }), chunks = [];
+    rec.ondataavailable = e => { if (e.data && e.data.size) chunks.push(e.data); };
+    const stopped = new Promise(r => { rec.onstop = r; });
+    await ac.resume();
+    draw(); rec.start(250);
+    await Promise.all(vs.map(v => v.play()));
+    const tick = () => { draw(); raf = requestAnimationFrame(tick); }; tick();
+    await new Promise(r => { longest.onended = r; });
+    cancelAnimationFrame(raf); draw(); rec.stop(); await stopped;
+    download(new Blob(chunks, { type: mime.split(';')[0] }), slug(PROJECT.name) + '-' + fmt + (/mp4/.test(mime) ? '.mp4' : '.webm'));
+  } catch (err) {
+    alert('No se pudo exportar el video: ' + err.message);
+  } finally {
+    cancelAnimationFrame(raf); vs.forEach(v => { v.pause(); v.removeAttribute('src'); });
+    if (ac) ac.close().catch(() => {});
+    el.remove(); setBusy(false);
+  }
+}
+
 document.querySelectorAll('[data-dl-all]').forEach(b => b.addEventListener('click', () => exportAll(b.dataset.dlAll)));
 
 document.querySelectorAll('[data-jpg]').forEach(btn =>
@@ -2290,6 +2371,8 @@ function applyImg(photo) {
     img.style.transform = '';
     img.style.backgroundSize = r2(dw) + 'px ' + r2(dh) + 'px';
     img.style.backgroundPosition = r2((W - dw) / 2 + x) + 'px ' + r2((H - dh) / 2 + y) + 'px';
+    const vd = photo.querySelector('.ph-vid');
+    if (vd) { vd.style.width = r2(dw) + 'px'; vd.style.height = r2(dh) + 'px'; vd.style.left = r2((W - dw) / 2 + x) + 'px'; vd.style.top = r2((H - dh) / 2 + y) + 'px'; }
   } else {
     // sin medidas (marco oculto o imagen sin tamaño conocido): se usa "cubrir" y un transform como respaldo
     img.style.backgroundSize = '';
@@ -2559,7 +2642,7 @@ function editTargetOf(el) {
 function pickPhoto(photo) {
   const inp = document.createElement('input');
   inp.type = 'file';
-  inp.accept = 'image/*';
+  inp.accept = 'image/*,video/*';
   inp.addEventListener('change', () => {
     const f = inp.files && inp.files[0];
     if (f) loadImageInto(photo, f);
@@ -3990,6 +4073,8 @@ function setPhotoImage(photo, dataUrl, meta) {
   IMGS[id] = dataUrl;
   IMG_META[id] = meta || { w: 0, h: 0, mime: (dataUrl.match(/^data:([^;]+)/) || [])[1] || 'image/jpeg' };
   bindPhotoImage(photo, id);
+  const oldVid = photo.querySelector('.ph-vid'); if (oldVid) oldVid.remove();
+  delete photo.dataset.vid;
   photo.dataset.imgZ = 1;
   photo.dataset.imgX = 0;
   photo.dataset.imgY = 0;
@@ -4045,13 +4130,44 @@ async function importImageFile(file) {
   return { dataUrl, meta: { w, h, mime } };
 }
 
+const VIDS = {};   // id de imagen (póster) → { url, blob }; solo en memoria (no cabe en localStorage)
+function attachVideo(photo, id) {
+  const old = photo.querySelector('.ph-vid'); if (old) old.remove();
+  photo.querySelector('.ph-img').insertAdjacentHTML('afterend', '<video class="ph-vid" src="' + VIDS[id].url + '" muted loop autoplay playsinline></video>');
+  photo.dataset.vid = id;
+  const v = photo.querySelector('.ph-vid'); v.muted = true; v.play().catch(() => {});
+  applyImg(photo);
+}
+async function loadVideoInto(photo, file) {
+  const url = URL.createObjectURL(file), v = document.createElement('video');
+  try {
+    v.muted = true; v.playsInline = true; v.preload = 'auto'; v.src = url;
+    await new Promise((ok, no) => { v.onloadeddata = ok; v.onerror = () => no(new Error('formato de video no compatible con este navegador')); });
+    v.currentTime = Math.min(0.1, (v.duration || 1) / 2);
+    await new Promise(r => { v.onseeked = r; setTimeout(r, 1500); });
+    const sw = v.videoWidth, sh = v.videoHeight, k = Math.min(1, MAX_IMG_SIDE / Math.max(sw, sh));
+    const w = Math.max(1, Math.round(sw * k)), h = Math.max(1, Math.round(sh * k));
+    const cv = document.createElement('canvas'); cv.width = w; cv.height = h;
+    cv.getContext('2d').drawImage(v, 0, 0, w, h);
+    setPhotoImage(photo, cv.toDataURL('image/jpeg', 0.86), { w, h, mime: 'image/jpeg' });
+    const id = photo.querySelector('.ph-img').dataset.srcId;
+    VIDS[id] = { url, blob: file };
+    attachVideo(photo, id);
+    hideToast();
+  } catch (err) {
+    URL.revokeObjectURL(url);
+    throw err;
+  }
+}
+
 async function loadImageInto(photo, file) {
   try {
+    if (file && /^video\//.test(file.type)) { await loadVideoInto(photo, file); return; }
     const { dataUrl, meta } = await importImageFile(file);
     setPhotoImage(photo, dataUrl, meta);
     hideToast();
   } catch (err) {
-    toast('No se pudo cargar la imagen: ' + err.message);
+    toast('No se pudo cargar el archivo: ' + err.message);
   }
 }
 
@@ -6988,7 +7104,7 @@ async function makePdf(pages, title) {
 
   /* Escala según calidad; limitada al área máxima de canvas de los móviles (~16,7 Mpx) */
   window.expScale = function (type) {
-    if (type === 'svg') return 1;
+    if (type === 'svg' || type === 'video') return 1;
     const cap = Math.sqrt(16.7e6 / (1080 * RATIO_H[fmtNow()]));
     return Math.max(1, Math.min(LV[E.q[type]] || 1, cap));
   };
@@ -6997,9 +7113,9 @@ async function makePdf(pages, title) {
     const n = PAGES.length, multi = n > 1, t = E.type;
     if (!multi) E.pages = 'all';
     $('ex-type').value = t;
-    document.querySelector('[data-ex="q"]').hidden = t === 'svg';
-    document.querySelector('[data-ex="p"]').hidden = !multi;
-    document.querySelector('[data-ex="range"]').hidden = !(multi && E.pages === 'range');
+    document.querySelector('[data-ex="q"]').hidden = t === 'svg' || t === 'video';
+    document.querySelector('[data-ex="p"]').hidden = !multi || t === 'video';
+    document.querySelector('[data-ex="range"]').hidden = !(multi && E.pages === 'range') || t === 'video';
     const sel = pagesSel(), cnt = sel.length;
     document.querySelector('[data-ex="split"]').hidden = !(t === 'pdf' && cnt > 1);
     if (document.activeElement !== $('ex-range')) $('ex-range').value = E.range;
@@ -7012,6 +7128,7 @@ async function makePdf(pages, title) {
     document.querySelectorAll('#ex-p button').forEach(b => b.classList.toggle('on', b.dataset.v === E.pages));
     if (!cnt) { $('ex-sum').textContent = 'Escribe un rango válido, por ejemplo 1-3, 5 (el proyecto tiene ' + n + ' páginas).'; return; }
     const sc = expScale(t), h = RATIO_H[fmtNow()];
+    if (t === 'video') { $('ex-sum').textContent = 'Página actual · 1080 × ' + h + ' px · MP4 o WebM según el navegador'; return; }
     const size = t === 'svg' ? '1080 × ' + h + ' px' : Math.round(1080 * sc) + ' × ' + Math.round(h * sc) + ' px';
     const zip = cnt > 1 && (t !== 'pdf' || E.split);
     $('ex-sum').textContent = (cnt > 1 ? cnt + ' páginas' : '1 página') + ' · ' + size + ' · ' + (t === 'pdf' ? (zip ? 'ZIP de PDF' : 'un solo PDF') : zip ? 'ZIP' : t.toUpperCase());
@@ -7026,6 +7143,7 @@ async function makePdf(pages, title) {
 
   async function run() {
     if (!pagesSel().length) return;
+    if (E.type === 'video') return exportVideo();
     flushAll();
     const t = E.type, fmt = fmtNow(), h = RATIO_H[fmt], sc = expScale(t), q = JQ[E.q[t]] || 0.95;
     const base = slug(PROJECT.name), pad = n => String(n).padStart(2, '0'), list = pagesSel();
