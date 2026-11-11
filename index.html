@@ -2256,7 +2256,11 @@ document.addEventListener('pointerdown', e => {
     dx0: parseFloat(el.dataset.dx) || 0,
     dy0: parseFloat(el.dataset.dy) || 0,
     ratio: el.offsetWidth / (el.offsetHeight || 1),
-    keep: hd.length === 2 || e.shiftKey
+    keep: hd.length === 2 || e.shiftKey,
+    text: isTextEl(el),
+    fs0: parseFloat(getComputedStyle(el).fontSize) || 16,
+    pad0: el.style.padding ? parseFloat(el.style.padding) : null,
+    r0: rectIn(el)
   };
 }, true);
 
@@ -2321,6 +2325,32 @@ document.addEventListener('pointermove', e => {
     const dX = (e.clientX - st.x) / st.s;
     const dY = (e.clientY - st.y) / st.s;
     const hd = st.h;
+    if (st.text) {                                    // TEXTO: esquinas = tamaño de letra · lados (←→) = ancho de la caja · el alto siempre es el del texto
+      const el = st.el;
+      if (hd.length === 2) {
+        const r0 = st.r0;
+        const ax = hd.includes('w') ? r0.x + r0.w : r0.x, ay = hd.includes('n') ? r0.y + r0.h : r0.y;
+        const hx = hd.includes('w') ? r0.x : r0.x + r0.w, hy = hd.includes('n') ? r0.y : r0.y + r0.h;
+        const vx = hx - ax, vy = hy - ay;
+        const k0 = (((hx + dX) - ax) * vx + ((hy + dY) - ay) * vy) / ((vx * vx + vy * vy) || 1);
+        const fs = Math.min(400, Math.max(6, st.fs0 * k0)), k = fs / st.fs0;
+        el.dataset.dx = st.dx0; el.dataset.dy = st.dy0; applyT(el);
+        el.style.fontSize = r2(fs) + 'px';
+        el.style.width = Math.max(20, Math.round(st.w0 * k)) + 'px';
+        if (st.pad0 != null) el.style.padding = r2(st.pad0 * k) + 'px';
+        el.style.height = '';
+        const r = rectIn(el);                         // el vértice opuesto al que se arrastra queda fijo
+        moveBy(el, hd.includes('w') ? ax - (r.x + r.w) : 0, hd.includes('n') ? ay - (r.y + r.h) : 0);
+      } else {
+        const w = Math.max(20, Math.round(hd === 'e' ? st.w0 + dX : st.w0 - dX));
+        el.style.width = w + 'px';
+        el.style.height = '';
+        if (hd === 'w') el.dataset.dx = st.dx0 + (st.w0 - w);
+        applyT(el);
+      }
+      updateBox();
+      return;
+    }
     let w = st.w0, h = st.h0;
     if (hd.includes('e')) w = st.w0 + dX;
     if (hd.includes('w')) w = st.w0 - dX;
@@ -4038,6 +4068,12 @@ function photoTarget(piece) {
 /* ---------- Serialización: DOM → proyecto ---------- */
 function sizeOf(v) { const n = parseFloat(v); return v && Number.isFinite(n) && n > 0 ? r2(n) : null; }
 
+/* Un texto nunca tiene alto fijo: su caja siempre mide lo que mide el texto real (más el espaciado interno).
+   Solo el ancho puede fijarse (define dónde se parte el renglón). */
+function isTextEl(el) {
+  return !!el && !!el.dataset && !!el.dataset.f && !el.classList.contains('photo') && !el.classList.contains('pc-sticker') && !!TEXT_ROLES[el.dataset.f];
+}
+
 function serializeElement(el, used) {
   const uid = el.dataset.uid;
   if (!uid) return null;
@@ -4052,7 +4088,7 @@ function serializeElement(el, used) {
     id: uid,
     origin: el.dataset.origin === 'user' ? 'user' : 'template',
     layout,
-    size: { width: sizeOf(el.style.width), height: sizeOf(el.style.height) },
+    size: { width: sizeOf(el.style.width), height: isTextEl(el) ? null : sizeOf(el.style.height) },
     rotation: r2(numOr(el.dataset.rot)),
     z: Math.round(zOf(el)),
     locked: isLocked(el)
@@ -4174,7 +4210,7 @@ function applyElementData(el, e) {
     el.dataset.dy = L.dy;
   }
   el.style.width = e.size.width != null ? e.size.width + 'px' : '';
-  el.style.height = e.size.height != null ? e.size.height + 'px' : '';
+  el.style.height = e.type !== 'text' && e.size.height != null ? e.size.height + 'px' : '';   // los textos se ajustan solos a su contenido
   applyT(el);
   if (e.type === 'text') {
     el.textContent = e.text;
@@ -5051,7 +5087,15 @@ const FXUI = (function () {
 
     /* ---- Espaciado interno (pestaña dentro de "Fondo") ---- */
     const pd = slider('Espaciado interno (px)', { min: 0, max: 120, nmax: 400 });
-    bindNum(pd, v => { const el = cur(); if (!el) return; v = clamp(Math.round(v), 0, 400); el.style.padding = v + 'px'; pd.set(v); touch(); });
+    bindNum(pd, v => {
+      const el = cur(); if (!el) return;
+      v = clamp(Math.round(v), 0, 400);
+      if (isTextEl(el)) {                             // el relleno crece hacia afuera: el texto conserva posición y saltos de línea
+        const p0 = Math.round(parseFloat(getComputedStyle(el).paddingTop) || 0), w0 = el.offsetWidth, d = v - p0;
+        if (d) { el.style.width = Math.max(20, w0 + 2 * d) + 'px'; el.style.height = ''; moveBy(el, -d, -d); }
+      }
+      el.style.padding = v + 'px'; pd.set(v); touch();
+    });
     card._fxPad = pd.el;
 
     function sync() {
@@ -5108,6 +5152,7 @@ html body .side .ms-chip { color: #fff !important }
 .rs-more.inside { top: 50%; margin-top: calc(var(--mv) * var(--inv, 1) / -2) }
 @media (pointer: coarse) { .rs-more { --mv: 30px; --gap: 25px; width: calc(46px * var(--inv, 1)); margin-left: calc((var(--mv) / 2 + 10px) * var(--inv, 1)) } }
 .piece.is-editing .rs-more { display: none !important }
+.rs-box.is-text .rs-h[data-h="e"], .rs-box.is-text .rs-h[data-h="w"] { display: flex }
 .rs-box.is-locked { border-style: dotted }
 .rs-box.is-locked .rs-h, .rs-box.is-locked .rs-mv { display: none !important }
 .rs-box.is-locked .rs-more { margin-left: calc(-18px * var(--inv, 1)) }
@@ -5257,7 +5302,7 @@ html body .ctx-menu button[data-m="del"]:hover { background: var(--ui-raised) }
       }
       const multi = isMulti() && piece.contains(SEL[0]);
       const one = !multi && selected && piece.contains(selected) ? selected : null;
-      box.classList.remove('is-multi', 'is-locked');
+      box.classList.remove('is-multi', 'is-locked', 'is-text');
       if (!multi && !one) return;                                // la caja ya quedó oculta
       const list = multi ? rootsOf(SEL) : [one], locked = list.some(isLocked);
       if (multi) {
@@ -5265,6 +5310,7 @@ html body .ctx-menu button[data-m="del"]:hover { background: var(--ui-raised) }
         box.classList.remove('is-photo');
         box.classList.toggle('is-multi', !locked);
       }
+      box.classList.toggle('is-text', !!one && !locked && isTextEl(one));   // texto: tiradores de esquina (letra) y de los lados (ancho)
       box.classList.toggle('is-locked', locked);                // bloqueado: sin tiradores, pero con el menú ⋯
       box.classList.add('on');
       const r = multi ? unionRect(list) : rectIn(one);
@@ -5323,7 +5369,7 @@ html body .ctx-menu button[data-m="del"]:hover { background: var(--ui-raised) }
         dx0: parseFloat(el.dataset.dx) || 0, dy0: parseFloat(el.dataset.dy) || 0,
         cx: r.x + r.w / 2, cy: r.y + r.h / 2,
         fs0: parseFloat(cs.fontSize) || 0, hasFs: !!el.dataset.f,
-        both: el.classList.contains('photo') || !!el.style.height,
+        both: !isTextEl(el) && (el.classList.contains('photo') || !!el.style.height),
         pad0: el.style.padding ? parseFloat(el.style.padding) : null
       };
     });
@@ -5670,7 +5716,7 @@ html body .ctx-menu button[data-m="del"]:hover { background: var(--ui-raised) }
         c.querySelectorAll('.ph-img').forEach(n => n.style.removeProperty('background-image'));
         return {
           html: c.outerHTML, w: el.offsetWidth, h: el.offsetHeight, cx: r.x + r.w / 2, cy: r.y + r.h / 2,
-          fixedH: el.classList.contains('photo') || !!el.style.height,
+          fixedH: !isTextEl(el) && (el.classList.contains('photo') || !!el.style.height),
           fs: el.dataset.f ? getComputedStyle(el).fontSize : null,
           gid: el.dataset.group || null
         };
