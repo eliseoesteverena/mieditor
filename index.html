@@ -4065,6 +4065,7 @@ function bindPhotoImage(photo, id) {
   if (m.w) { im.dataset.iw = m.w; im.dataset.ih = m.h; }
   im.style.backgroundImage = `url("${IMGS[id]}")`;
   photo.classList.add('has-img');
+  ensureVideo(photo, id);
 }
 
 function setPhotoImage(photo, dataUrl, meta) {
@@ -4130,7 +4131,50 @@ async function importImageFile(file) {
   return { dataUrl, meta: { w, h, mime } };
 }
 
-const VIDS = {};   // id de imagen (póster) → { url, blob }; solo en memoria (no cabe en localStorage)
+/* Los videos no caben en localStorage: el blob va a IndexedDB con la MISMA clave que la imagen-póster (img_xxx),
+   así el esquema del proyecto no cambia. VIDS es la caché de la sesión: id → { url, blob }. */
+const VIDS = {};
+const VDB = {
+  db: null,
+  open() {
+    return this.db || (this.db = new Promise((ok, no) => {
+      const r = indexedDB.open('igp-videos', 1);
+      r.onupgradeneeded = () => r.result.createObjectStore('v');
+      r.onsuccess = () => ok(r.result);
+      r.onerror = () => no(r.error);
+    }));
+  },
+  async tx(mode, fn) {
+    const db = await this.open();
+    return new Promise((ok, no) => {
+      const t = db.transaction('v', mode), req = fn(t.objectStore('v'));
+      t.oncomplete = () => ok(req && req.result);
+      t.onerror = t.onabort = () => no(t.error);
+    });
+  },
+  put(id, blob) { return this.tx('readwrite', s => s.put(blob, id)); },
+  get(id) { return this.tx('readonly', s => s.get(id)); },
+  del(id) { return this.tx('readwrite', s => s.delete(id)); },
+  keys() { return this.tx('readonly', s => s.getAllKeys()); }
+};
+/* Al abrir un proyecto (o deshacer) la foto se vuelve a enlazar: si hay video guardado, se recupera. */
+function ensureVideo(photo, id) {
+  if (VIDS[id]) { if (!photo.querySelector('.ph-vid')) attachVideo(photo, id); return; }
+  VDB.get(id).then(blob => {
+    if (!blob || VIDS[id]) return;
+    VIDS[id] = { url: URL.createObjectURL(blob), blob };
+    document.querySelectorAll('.photo .ph-img').forEach(im => { if (im.dataset.srcId === id && !im.parentNode.querySelector('.ph-vid')) attachVideo(im.parentNode, id); });
+  }).catch(() => {});
+}
+/* Borra de IndexedDB los videos que ya no usa ningún proyecto guardado (solo si el almacenamiento funciona). */
+async function gcVideos() {
+  try {
+    if (!Store.ok()) return;
+    const keep = new Set(Object.keys(VIDS));
+    Store.index().forEach(m => ((localStorage.getItem(Store.P + 'project:' + m.id) || '').match(/img_[0-9a-z]{10}/g) || []).forEach(k => keep.add(k)));
+    for (const k of await VDB.keys()) if (!keep.has(k)) await VDB.del(k);
+  } catch (_) {}
+}
 function attachVideo(photo, id) {
   const old = photo.querySelector('.ph-vid'); if (old) old.remove();
   photo.querySelector('.ph-img').insertAdjacentHTML('afterend', '<video class="ph-vid" src="' + VIDS[id].url + '" muted loop autoplay playsinline></video>');
@@ -4152,6 +4196,8 @@ async function loadVideoInto(photo, file) {
     setPhotoImage(photo, cv.toDataURL('image/jpeg', 0.86), { w, h, mime: 'image/jpeg' });
     const id = photo.querySelector('.ph-img').dataset.srcId;
     VIDS[id] = { url, blob: file };
+    VDB.put(id, file).catch(() => toast('El video no se guardará al recargar: el navegador bloqueó el almacenamiento.'));
+    try { navigator.storage && navigator.storage.persist && navigator.storage.persist(); } catch (_) {}
     attachVideo(photo, id);
     hideToast();
   } catch (err) {
@@ -4342,6 +4388,8 @@ function applyElementData(el, e) {
       el.classList.remove('has-img');
       im.style.backgroundImage = '';
       delete im.dataset.srcId;
+      const pv = el.querySelector('.ph-vid'); if (pv) pv.remove();
+      delete el.dataset.vid;
     }
     el.style.background = e.style.background || '';
     applyFx(el, e.style);
@@ -4676,6 +4724,7 @@ function duplicateProject(id) {
 
 function deleteProject(id) {
   Store.remove(id);
+  gcVideos();
   if (PROJECT.id === id) {
     const rest = Store.list();
     if (rest.length && openProject(rest[0].id)) return;
@@ -4785,6 +4834,7 @@ function bootProject() {
     document.getElementById('proj-name').value = PROJECT.name;
   }
   BOOTED = true;
+  if (storage) setTimeout(gcVideos, 4000);
   if (!storage) setSaveStatus('warn', 'Sin guardado: el navegador bloquea el almacenamiento');
   else if (!opened) {
     saveNow(true, true);
